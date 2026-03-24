@@ -465,8 +465,8 @@ export default function AssetsPage() {
                   value={formCurrency}
                   onChange={e => setFormCurrency(e.target.value)}
                 >
-                  {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency }]).map((c) => (
-                    <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
+                  {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency, flag: '' }]).map((c) => (
+                    <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
                   ))}
                 </select>
               </div>

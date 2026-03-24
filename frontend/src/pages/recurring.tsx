@@ -314,8 +314,8 @@ function RecurringForm({
         <div className="space-y-2">
           <Label>{t('recurring.currency')}</Label>
           <select className={selectClass} value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency }]).map((c) => (
-              <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
+            {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency, flag: '' }]).map((c) => (
+              <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
             ))}
           </select>
         </div>

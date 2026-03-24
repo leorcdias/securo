@@ -8,6 +8,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from app.core.config import get_settings
 from app.models.fx_rate import FxRate
 from app.models.user import User
 from app.providers.openexchangerates import OpenExchangeRatesProvider
@@ -32,8 +33,14 @@ async def sync_rates(
     else:
         rates = await _provider.fetch_historical(target)
 
+    settings = get_settings()
+    supported = {c.strip() for c in settings.supported_currencies.split(",") if c.strip()}
+    supported.add("USD")  # always need USD as base
+
     count = 0
     for currency_code, rate in rates.items():
+        if currency_code not in supported:
+            continue
         stmt = pg_insert(FxRate).values(
             base_currency="USD",
             quote_currency=currency_code,

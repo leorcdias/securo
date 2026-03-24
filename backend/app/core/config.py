@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # FX Rates
     openexchangerates_app_id: str = ""
-    supported_currencies: str = "BRL,USD,EUR,GBP"  # comma-separated list
+    supported_currencies: str = "BRL,USD,EUR,GBP,CAD,AUD,CHF,JPY,MXN,ARS"  # comma-separated list
     fx_sync_mode: str = "on_demand"  # "on_demand" or "scheduled"
 
     # Celery
