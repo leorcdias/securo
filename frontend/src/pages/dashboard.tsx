@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { ptBR, enUS } from 'date-fns/locale'
-import { dashboard, transactions, budgets, categories as categoriesApi, accounts as accountsApi } from '@/lib/api'
+import { dashboard, transactions, budgets, categories as categoriesApi, accounts as accountsApi, fxRates } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -25,7 +25,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { CheckCircle2, CalendarIcon } from 'lucide-react'
+import { CheckCircle2, CalendarIcon, RefreshCw } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { CategoryIcon } from '@/components/category-icon'
 import { TransactionDrillDown, type DrillDownFilter } from '@/components/transaction-drill-down'
@@ -169,6 +169,13 @@ export default function DashboardPage() {
     },
   })
 
+  const refreshRatesMutation = useMutation({
+    mutationFn: () => fxRates.refresh(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+
   const cumulativeData = useMemo(() => {
     if (!balanceHistory) return []
     const daysInMonth = monthLastDay(selectedMonth)
@@ -191,12 +198,13 @@ export default function DashboardPage() {
   const currentLatestBalance = lastCurrentPoint?.current ?? 0
   const monthVariation = currentLatestBalance - currentStartBalance
 
-  const totalBalance = Object.values(summary?.total_balance ?? {}).reduce((a, b) => a + Number(b), 0)
+  const primaryCurrency = summary?.primary_currency ?? userCurrency
+  const totalBalance = summary?.total_balance_primary ?? Object.values(summary?.total_balance ?? {}).reduce((a, b) => a + Number(b), 0)
 
 
   // Savings rate & projection
-  const income = Number(summary?.monthly_income ?? 0)
-  const expenses = Number(summary?.monthly_expenses ?? 0)
+  const income = Number(summary?.monthly_income_primary ?? summary?.monthly_income ?? 0)
+  const expenses = Number(summary?.monthly_expenses_primary ?? summary?.monthly_expenses ?? 0)
   const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0
   const isCurrentMonth = selectedMonth === currentMonth()
   const daysElapsed = isCurrentMonth ? new Date().getDate() : monthLastDay(selectedMonth)
@@ -253,6 +261,7 @@ export default function DashboardPage() {
     date: string
     type: 'debit' | 'credit'
     amount: number
+    amountPrimary: number | null
     currency: string
     categoryIcon: string | null
     categoryName: string | null
@@ -270,6 +279,7 @@ export default function DashboardPage() {
         date: tx.date,
         type: tx.type,
         amount: Number(tx.amount),
+        amountPrimary: tx.amount_primary != null ? Number(tx.amount_primary) : null,
         currency: tx.currency,
         categoryIcon: tx.category?.icon ?? null,
         categoryName: tx.category?.name ?? null,
@@ -284,6 +294,7 @@ export default function DashboardPage() {
         date: pt.date,
         type: pt.type,
         amount: pt.amount,
+        amountPrimary: pt.amount_primary ?? null,
         currency: pt.currency,
         categoryIcon: pt.category_icon,
         categoryName: pt.category_name,
@@ -354,6 +365,16 @@ export default function DashboardPage() {
               className="h-8 w-8 flex items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-border hover:text-foreground transition-all text-base"
               onClick={() => handleMonthChange(shiftMonth(selectedMonth, 1))}
             >&#8250;</button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-2 h-8"
+              onClick={() => refreshRatesMutation.mutate()}
+              disabled={refreshRatesMutation.isPending}
+              title={t('dashboard.refreshRates')}
+            >
+              <RefreshCw className={`size-3.5 ${refreshRatesMutation.isPending ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
         }
       />
@@ -385,8 +406,18 @@ export default function DashboardPage() {
                 ) : (
                   <div>
                     <p className={`text-lg font-bold tabular-nums ${totalBalance < 0 ? 'text-rose-500' : 'text-foreground'}`}>
-                      {mask(formatCurrency(totalBalance, userCurrency, locale))}
+                      {mask(formatCurrency(totalBalance, primaryCurrency, locale))}
                     </p>
+                    {/* Per-currency breakdown when multiple currencies */}
+                    {summary?.total_balance && Object.keys(summary.total_balance).length > 1 && (
+                      <div className="flex flex-wrap gap-x-2 mt-0.5">
+                        {Object.entries(summary.total_balance).map(([cur, val]) => (
+                          <span key={cur} className="text-[10px] text-muted-foreground tabular-nums">
+                            {mask(formatCurrency(val, cur, locale))}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <Popover open={balanceCalOpen} onOpenChange={setBalanceCalOpen}>
                       <PopoverTrigger asChild>
                         <button className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors cursor-pointer p-0 bg-transparent border-none outline-none">
@@ -434,7 +465,7 @@ export default function DashboardPage() {
                   <Skeleton className="h-7 w-24" />
                 ) : (
                   <p className="text-lg font-bold tabular-nums text-emerald-600">
-                    +{mask(formatCurrency(income, userCurrency, locale))}
+                    +{mask(formatCurrency(income, primaryCurrency, locale))}
                   </p>
                 )}
               </div>
@@ -454,7 +485,7 @@ export default function DashboardPage() {
                   <Skeleton className="h-7 w-24" />
                 ) : (
                   <p className="text-lg font-bold tabular-nums text-rose-500">
-                    -{mask(formatCurrency(expenses, userCurrency, locale))}
+                    -{mask(formatCurrency(expenses, primaryCurrency, locale))}
                   </p>
                 )}
               </div>
@@ -464,7 +495,7 @@ export default function DashboardPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('dashboard.assetsValue')}</p>
                   <p className="text-lg font-bold tabular-nums text-blue-600">
-                    {mask(formatCurrency(Object.values(summary.assets_value).reduce((a, b) => a + b, 0), userCurrency, locale))}
+                    {mask(formatCurrency(summary.assets_value_primary ?? Object.values(summary.assets_value).reduce((a, b) => a + b, 0), primaryCurrency, locale))}
                   </p>
                 </div>
               )}
@@ -473,7 +504,7 @@ export default function DashboardPage() {
             {/* Spending projection */}
             {projectedSpend !== null && !summaryLoading && (
               <p className="text-xs text-muted-foreground mt-2">
-                {t('dashboard.spendingProjection', { amount: mask(formatCurrency(projectedSpend, userCurrency, locale)) })}
+                {t('dashboard.spendingProjection', { amount: mask(formatCurrency(projectedSpend, primaryCurrency, locale)) })}
               </p>
             )}
           </div>
@@ -792,6 +823,11 @@ export default function DashboardPage() {
                         <span className={`text-sm font-semibold tabular-nums ${row.type === 'credit' ? 'text-emerald-600' : 'text-rose-500'}`}>
                           {mask(`${row.type === 'credit' ? '+' : '-'}${formatCurrency(Math.abs(row.amount), row.currency, locale)}`)}
                         </span>
+                        {row.currency !== userCurrency && row.amountPrimary != null && (
+                          <span className="block text-[10px] text-muted-foreground tabular-nums">
+                            {mask(formatCurrency(Math.abs(row.amountPrimary), userCurrency, locale))}
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

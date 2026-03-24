@@ -31,6 +31,7 @@ class Asset(Base):
     growth_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(precision=15, scale=6), nullable=True)
     growth_frequency: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # daily, weekly, monthly, yearly
     growth_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    purchase_price_primary: Mapped[Optional[Decimal]] = mapped_column(Numeric(precision=15, scale=2), nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     position: Mapped[int] = mapped_column(Integer, default=0)
 

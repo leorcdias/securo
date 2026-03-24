@@ -35,6 +35,7 @@ class AccountRead(AccountBase):
     external_id: Optional[str] = None
     current_balance: float = 0.0
     previous_balance: Optional[float] = None
+    balance_primary: Optional[float] = None
     is_closed: bool = False
     closed_at: Optional[datetime] = None
 

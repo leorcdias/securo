@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sqlalchemy import String, select, desc, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,8 @@ from app.models.asset import Asset
 from app.models.asset_value import AssetValue
 from app.models.transaction import Transaction
 from app.models.category import Category
+from app.models.user import User
+from app.services.fx_rate_service import convert
 from app.schemas.report import (
     CategoryTrendItem,
     ReportBreakdown,
@@ -22,9 +25,11 @@ from app.services.dashboard_service import _get_open_accounts, _account_balance_
 
 
 async def _asset_value_at(
-    session: AsyncSession, user_id: uuid.UUID, cutoff: date
+    session: AsyncSession, user_id: uuid.UUID, cutoff: date,
+    primary_currency: str = "BRL",
 ) -> float:
-    """Sum of all active (non-archived, non-sold) asset values at a given date.
+    """Sum of all active (non-archived, non-sold) asset values at a given date,
+    converted to primary currency.
 
     For each asset, finds the most recent AssetValue with date <= cutoff.
     Falls back to purchase_price if no value entries exist before the cutoff
@@ -52,20 +57,27 @@ async def _asset_value_at(
             .limit(1)
         )
         row = val_result.scalar_one_or_none()
+        amount = 0.0
         if row is not None:
-            total += float(row)
+            amount = float(row)
         elif asset.purchase_price is not None:
-            # Fall back to purchase_price if the asset existed by cutoff
             if asset.purchase_date is None or asset.purchase_date <= cutoff:
-                total += float(asset.purchase_price)
+                amount = float(asset.purchase_price)
+
+        if amount != 0.0:
+            converted, _ = await convert(
+                session, Decimal(str(amount)), asset.currency, primary_currency, cutoff
+            )
+            total += float(converted)
 
     return total
 
 
 async def _net_worth_at(
-    session: AsyncSession, user_id: uuid.UUID, cutoff: date
+    session: AsyncSession, user_id: uuid.UUID, cutoff: date,
+    primary_currency: str = "BRL",
 ) -> ReportDataPoint:
-    """Compute a single net worth snapshot at a given date."""
+    """Compute a single net worth snapshot at a given date, converted to primary currency."""
     accounts = await _get_open_accounts(session, user_id)
 
     accounts_total = 0.0
@@ -73,13 +85,20 @@ async def _net_worth_at(
 
     for account in accounts:
         bal = await _account_balance_at(session, account, cutoff)
+        # Convert to primary currency
+        converted, _ = await convert(
+            session, Decimal(str(abs(bal))), account.currency, primary_currency, cutoff
+        )
+        converted_val = float(converted)
         if account.type == "credit_card":
-            # _account_balance_at already negates credit_card; show as positive liability
-            liabilities_total += abs(bal)
+            liabilities_total += converted_val
         else:
-            accounts_total += bal
+            if bal < 0:
+                accounts_total -= converted_val
+            else:
+                accounts_total += converted_val
 
-    assets_total = await _asset_value_at(session, user_id, cutoff)
+    assets_total = await _asset_value_at(session, user_id, cutoff, primary_currency)
     net_worth = accounts_total + assets_total - liabilities_total
 
     return ReportDataPoint(
@@ -165,12 +184,16 @@ async def get_net_worth_report(
     start = date(today.year, today.month, 1) - timedelta(days=months * 30)
     start = start.replace(day=1)  # Align to month start
 
+    # Get user's primary currency
+    user = await session.get(User, user_id)
+    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
+
     points = _date_points(start, today, interval)
 
     # Compute snapshot at each date point
     trend: list[ReportDataPoint] = []
     for point in points:
-        dp = await _net_worth_at(session, user_id, point)
+        dp = await _net_worth_at(session, user_id, point, primary_currency)
         dp.date = _format_date_label(point, interval)
         trend.append(dp)
 
@@ -216,7 +239,7 @@ async def get_net_worth_report(
     meta = ReportMeta(
         type="net_worth",
         series_keys=["accounts", "assets", "liabilities"],
-        currency=currency,
+        currency=primary_currency,
         interval=interval,
     )
 
@@ -239,11 +262,15 @@ async def get_net_worth_report(
     accounts = await _get_open_accounts(session, user_id)
     for account in accounts:
         bal = await _account_balance_at(session, account, today)
+        converted, _ = await convert(
+            session, Decimal(str(abs(bal))), account.currency, primary_currency, today
+        )
+        converted_val = float(converted)
         if account.type == "credit_card":
             composition.append(ReportCompositionItem(
                 key=str(account.id),
                 label=account.name,
-                value=round(abs(bal), 2),
+                value=round(converted_val, 2),
                 color=account_type_colors.get(account.type, "#6B7280"),
                 group="liabilities",
             ))
@@ -252,7 +279,7 @@ async def get_net_worth_report(
                 composition.append(ReportCompositionItem(
                     key=str(account.id),
                     label=account.name,
-                    value=round(bal, 2),
+                    value=round(converted_val, 2),
                     color=account_type_colors.get(account.type, "#6B7280"),
                     group="accounts",
                 ))
@@ -282,10 +309,13 @@ async def get_net_worth_report(
         else:
             amount = 0.0
         if amount > 0:
+            converted, _ = await convert(
+                session, Decimal(str(amount)), asset.currency, primary_currency, today
+            )
             composition.append(ReportCompositionItem(
                 key=str(asset.id),
                 label=asset.name,
-                value=round(amount, 2),
+                value=round(float(converted), 2),
                 color=asset_type_colors.get(asset.type, "#6B7280"),
                 group="assets",
             ))
@@ -321,13 +351,20 @@ async def get_income_expenses_report(
     start = date(today.year, today.month, 1) - timedelta(days=months * 30)
     start = start.replace(day=1)
 
+    # Get user's primary currency
+    user = await session.get(User, user_id)
+    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
+
     label_expr = _interval_label_expr(interval).label('period')
+
+    # Use amount_primary when available, fall back to amount
+    amount_expr = func.coalesce(Transaction.amount_primary, Transaction.amount)
 
     result = await session.execute(
         select(
             label_expr,
-            func.sum(case((Transaction.type == "credit", Transaction.amount), else_=0)),
-            func.sum(case((Transaction.type == "debit", Transaction.amount), else_=0)),
+            func.sum(case((Transaction.type == "credit", amount_expr), else_=0)),
+            func.sum(case((Transaction.type == "debit", amount_expr), else_=0)),
         )
         .join(Account, Transaction.account_id == Account.id)
         .where(
@@ -348,6 +385,32 @@ async def get_income_expenses_report(
         income = float(row[1] or 0)
         expenses = abs(float(row[2] or 0))
         data_map[row[0]] = (income, expenses)
+
+    # Add recurring projections for each month in the range (consistent with dashboard)
+    from app.services.dashboard_service import _month_range, _get_recurring_projections
+    from app.services.fx_rate_service import convert as fx_convert
+
+    cursor = start
+    while cursor <= today:
+        m_start, m_end = _month_range(cursor)
+        projections = await _get_recurring_projections(session, user_id, m_start, m_end)
+        for proj in projections:
+            # Convert to primary currency
+            converted, _ = await fx_convert(
+                session, Decimal(str(proj["amount"])), proj["currency"], primary_currency,
+            )
+            proj_amount = float(converted)
+            label = _format_date_label(cursor, interval)
+            existing_income, existing_expenses = data_map.get(label, (0.0, 0.0))
+            if proj["type"] == "credit":
+                data_map[label] = (existing_income + proj_amount, existing_expenses)
+            else:
+                data_map[label] = (existing_income, existing_expenses + proj_amount)
+        # Advance to next month
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
 
     # Generate all expected date points and map to results
     points = _date_points(start, today, interval)
@@ -411,7 +474,7 @@ async def get_income_expenses_report(
     meta = ReportMeta(
         type="income_expenses",
         series_keys=["income", "expenses"],
-        currency=currency,
+        currency=primary_currency,
         interval=interval,
     )
 
@@ -422,7 +485,7 @@ async def get_income_expenses_report(
             Category.name,
             Category.color,
             Transaction.type,
-            func.sum(Transaction.amount),
+            func.sum(amount_expr),
         )
         .select_from(Transaction)
         .join(Account, Transaction.account_id == Account.id)
@@ -459,7 +522,7 @@ async def get_income_expenses_report(
             Category.name,
             Category.color,
             Transaction.type,
-            func.sum(Transaction.amount),
+            func.sum(amount_expr),
         )
         .select_from(Transaction)
         .join(Account, Transaction.account_id == Account.id)

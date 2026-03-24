@@ -14,6 +14,8 @@ class TransactionBase(BaseModel):
     date: _Date
     type: str  # debit, credit
     external_id: Optional[str] = None
+    currency: Optional[str] = None  # populated by parsers that detect currency
+    fx_rate: Optional[Decimal] = None  # populated from CSV if provided
 
 
 class TransactionCreate(TransactionBase):
@@ -21,6 +23,8 @@ class TransactionCreate(TransactionBase):
     category_id: Optional[uuid.UUID] = None
     currency: str = "BRL"
     notes: Optional[str] = None
+    amount_primary: Optional[Decimal] = None
+    fx_rate_used: Optional[Decimal] = None
 
 
 class TransactionUpdate(BaseModel):
@@ -31,6 +35,8 @@ class TransactionUpdate(BaseModel):
     currency: Optional[str] = None
     category_id: Optional[uuid.UUID] = None
     notes: Optional[str] = None
+    amount_primary: Optional[Decimal] = None
+    fx_rate_used: Optional[Decimal] = None
 
 
 class TransactionRead(TransactionBase):
@@ -45,6 +51,9 @@ class TransactionRead(TransactionBase):
     payee: Optional[str] = None
     notes: Optional[str] = None
     transfer_pair_id: Optional[uuid.UUID] = None
+    amount_primary: Optional[float] = None
+    fx_rate_used: Optional[float] = None
+    fx_fallback: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

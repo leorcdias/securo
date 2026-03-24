@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { categories as categoriesApi, recurring as recurringApi, accounts as accountsApi } from '@/lib/api'
+import { categories as categoriesApi, recurring as recurringApi, accounts as accountsApi, currencies as currenciesApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import type { Category, RecurringTransaction } from '@/types'
-import { Pencil, Trash2, Plus, RefreshCw } from 'lucide-react'
+import { Pencil, Trash2, Plus, RefreshCw, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/page-header'
 import { DatePickerInput } from '@/components/ui/date-picker-input'
@@ -59,6 +59,8 @@ function RecurringTab() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language === 'en' ? 'en-US' : i18n.language
   const { mask } = usePrivacyMode()
+  const { user } = useAuth()
+  const userCurrency = user?.preferences?.currency_display ?? 'BRL'
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<RecurringTransaction | null>(null)
@@ -164,6 +166,14 @@ function RecurringTab() {
                   <td className="py-3 pl-4 sm:pl-5 text-sm font-medium text-foreground">{rt.description}</td>
                   <td className={`py-3 text-xs sm:text-sm font-bold tabular-nums ${rt.type === 'credit' ? 'text-emerald-600' : 'text-rose-500'}`}>
                     {mask(`${rt.type === 'credit' ? '+' : '−'}${formatCurrency(rt.amount, rt.currency, locale)}`)}
+                    {rt.currency !== userCurrency && rt.amount_primary != null && (
+                      <div className="flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
+                        <span>{mask(formatCurrency(rt.amount_primary, userCurrency, locale))}</span>
+                        <span title={t('recurring.fxEstimate', { rate: rt.fx_rate_used?.toFixed(4) ?? '–' })}>
+                          <Info size={11} className="inline opacity-60" />
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="py-3 hidden md:table-cell">
                     <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
@@ -253,6 +263,11 @@ function RecurringForm({
   const { t } = useTranslation()
   const { user } = useAuth()
   const userCurrency = user?.preferences?.currency_display ?? 'BRL'
+  const { data: supportedCurrencies } = useQuery({
+    queryKey: ['currencies'],
+    queryFn: currenciesApi.list,
+    staleTime: Infinity,
+  })
   const [description, setDescription] = useState(recurring?.description ?? '')
   const [amount, setAmount] = useState(recurring?.amount?.toString() ?? '')
   const [currency, setCurrency] = useState(recurring?.currency ?? userCurrency)
@@ -299,7 +314,9 @@ function RecurringForm({
         <div className="space-y-2">
           <Label>{t('recurring.currency')}</Label>
           <select className={selectClass} value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            <option value={userCurrency}>{userCurrency} ({({ BRL: 'R$', USD: '$', EUR: '€', GBP: '£' } as Record<string, string>)[userCurrency] ?? userCurrency})</option>
+            {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency }]).map((c) => (
+              <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
+            ))}
           </select>
         </div>
         <div className="space-y-2">

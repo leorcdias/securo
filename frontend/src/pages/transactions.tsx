@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Check, Download, Search, X } from 'lucide-react'
+import { AlertTriangle, Check, Download, Search, X } from 'lucide-react'
 import type { Transaction } from '@/types'
 import { PageHeader } from '@/components/page-header'
 import { CategoryIcon } from '@/components/category-icon'
@@ -119,11 +119,14 @@ export default function TransactionsPage() {
       }
       return created
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['recurring'] })
       setDialogOpen(false)
       toast.success(t('transactions.created'))
+      if (created?.fx_fallback) {
+        toast.warning(t('transactions.fxFallbackToast', { currency: created.currency }))
+      }
     },
     onError: (error) => {
       toast.error(extractApiError(error))
@@ -418,6 +421,14 @@ export default function TransactionsPage() {
                     <span className={`text-xs md:text-sm font-bold tabular-nums ${tx.type === 'credit' ? 'text-emerald-600' : 'text-rose-500'}`}>
                       {mask(`${tx.type === 'credit' ? '+' : '−'}${formatCurrency(Math.abs(Number(tx.amount)), tx.currency, locale)}`)}
                     </span>
+                    {tx.amount_primary != null && tx.currency !== userCurrency && (
+                      <span className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground tabular-nums">
+                        {mask(formatCurrency(Math.abs(tx.amount_primary), userCurrency, locale))}
+                        {tx.fx_fallback && (
+                          <AlertTriangle size={12} className="text-amber-500 shrink-0" title={t('transactions.fxFallbackTooltip')} />
+                        )}
+                      </span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

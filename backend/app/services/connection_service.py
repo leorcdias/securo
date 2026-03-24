@@ -14,6 +14,7 @@ from app.models.transaction import Transaction
 from app.providers import get_provider
 from app.services.rule_service import apply_rules_to_transaction
 from app.services.transfer_detection_service import detect_transfer_pairs
+from app.services.fx_rate_service import stamp_primary_amount
 
 settings = get_settings()
 
@@ -175,6 +176,7 @@ async def handle_oauth_callback(
             new_tx_ids.append(transaction.id)
             if not category_id:
                 await apply_rules_to_transaction(session, user_id, transaction)
+            await stamp_primary_amount(session, user_id, transaction)
 
     # Detect transfer pairs among newly synced transactions
     await detect_transfer_pairs(session, user_id, candidate_ids=new_tx_ids)
@@ -339,6 +341,7 @@ async def sync_connection(
                 new_tx_ids.append(transaction.id)
                 if not category_id:
                     await apply_rules_to_transaction(session, user_id, transaction)
+                await stamp_primary_amount(session, user_id, transaction)
 
         # Detect transfer pairs among newly synced transactions
         if new_tx_ids:

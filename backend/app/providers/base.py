@@ -40,6 +40,26 @@ class ConnectTokenData:
     access_token: str
 
 
+class FxRateProvider(ABC):
+    """Abstract interface for FX rate providers."""
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Unique provider identifier (e.g. 'openexchangerates')."""
+        ...
+
+    @abstractmethod
+    async def fetch_latest(self) -> dict[str, Decimal]:
+        """Return {currency_code: rate_vs_USD} for latest rates."""
+        ...
+
+    @abstractmethod
+    async def fetch_historical(self, target_date: date) -> dict[str, Decimal]:
+        """Return rates for a specific date."""
+        ...
+
+
 class BankProvider(ABC):
     """Abstract interface for open finance integrations.
 

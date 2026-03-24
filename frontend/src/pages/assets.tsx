@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { assets } from '@/lib/api'
+import { assets, currencies as currenciesApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -74,6 +74,12 @@ export default function AssetsPage() {
   const { user } = useAuth()
   const userCurrency = user?.preferences?.currency_display ?? 'BRL'
   const queryClient = useQueryClient()
+
+  const { data: supportedCurrencies } = useQuery({
+    queryKey: ['currencies'],
+    queryFn: currenciesApi.list,
+    staleTime: Infinity,
+  })
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
@@ -318,10 +324,20 @@ export default function AssetsPage() {
               <>
                 <p className="text-sm font-bold tabular-nums text-foreground">
                   {mask(formatCurrency(asset.current_value, asset.currency, locale))}
+                  {asset.current_value_primary != null && (
+                    <span className="text-[10px] font-medium text-muted-foreground ml-1">
+                      ({mask(formatCurrency(asset.current_value_primary, userCurrency, locale))})
+                    </span>
+                  )}
                 </p>
                 {asset.gain_loss != null && (
                   <p className={`text-xs font-medium tabular-nums ${asset.gain_loss >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                     {mask(`${asset.gain_loss >= 0 ? '+' : ''}${formatCurrency(asset.gain_loss, asset.currency, locale)}`)}
+                    {asset.gain_loss_primary != null && (
+                      <span className="text-[10px] text-muted-foreground ml-1">
+                        ({mask(formatCurrency(asset.gain_loss_primary, userCurrency, locale))})
+                      </span>
+                    )}
                   </p>
                 )}
               </>
@@ -449,7 +465,9 @@ export default function AssetsPage() {
                   value={formCurrency}
                   onChange={e => setFormCurrency(e.target.value)}
                 >
-                  <option value={userCurrency}>{userCurrency} ({({ BRL: 'R$', USD: '$', EUR: '€', GBP: '£' } as Record<string, string>)[userCurrency] ?? userCurrency})</option>
+                  {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency }]).map((c) => (
+                    <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
+                  ))}
                 </select>
               </div>
             </div>

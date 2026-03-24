@@ -443,6 +443,26 @@ export const reports = {
   },
 }
 
+// Currencies
+export const currencies = {
+  list: async (): Promise<{ code: string; symbol: string; name: string }[]> => {
+    const { data } = await api.get('/currencies')
+    return data
+  },
+}
+
+// FX Rates
+export const fxRates = {
+  refresh: async (): Promise<{ synced: boolean; rates_count: number; date: string }> => {
+    const { data } = await api.post('/fx-rates/refresh')
+    return data
+  },
+  status: async (): Promise<{ last_sync_date: string | null; total_rates: number }> => {
+    const { data } = await api.get('/fx-rates/status')
+    return data
+  },
+}
+
 // Import Logs
 export const importLogs = {
   list: async (): Promise<ImportLog[]> => {

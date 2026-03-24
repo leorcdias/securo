@@ -49,5 +49,7 @@ class RecurringTransactionRead(BaseModel):
     end_date: Optional[_Date] = None
     is_active: bool
     next_occurrence: _Date
+    amount_primary: Optional[float] = None
+    fx_rate_used: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
