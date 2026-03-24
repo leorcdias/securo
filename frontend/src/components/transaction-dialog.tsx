@@ -268,8 +268,8 @@ function TransactionForm({
             onChange={(e) => handleCurrencyChange(e.target.value)}
             disabled={isSynced}
           >
-            {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency }]).map((c) => (
-              <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
+            {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency, flag: '' }]).map((c) => (
+              <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
             ))}
           </select>
         </div>

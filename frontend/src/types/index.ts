@@ -246,7 +246,9 @@ export interface Asset {
   is_archived: boolean
   position: number
   current_value: number | null
+  current_value_primary: number | null
   gain_loss: number | null
+  gain_loss_primary: number | null
   value_count: number
 }
 

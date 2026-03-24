@@ -1,7 +1,7 @@
 """Tests for FX rate service, API endpoints, and multi-currency integration."""
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account
 from app.models.fx_rate import FxRate
-from app.models.recurring_transaction import RecurringTransaction
 from app.models.transaction import Transaction
 from app.models.user import User
 
