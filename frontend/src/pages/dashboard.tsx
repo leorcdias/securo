@@ -79,14 +79,12 @@ export default function DashboardPage() {
     return displayName ? `${base}, ${displayName}` : base
   })()
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const [balanceDate, setBalanceDate] = useState<string | undefined>()
   const [drillDown, setDrillDown] = useState<DrillDownFilter | null>(null)
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const queryClient = useQueryClient()
   const [headerCalOpen, setHeaderCalOpen] = useState(false)
   const [hoveredDay, setHoveredDay] = useState<number | null>(null)
-  const [balanceCalOpen, setBalanceCalOpen] = useState(false)
   const dateFnsLocale = i18n.language === 'pt-BR' ? ptBR : enUS
   const monthParam = `${selectedMonth}-01`
   const monthStart = `${selectedMonth}-01`
@@ -95,12 +93,11 @@ export default function DashboardPage() {
 
   const handleMonthChange = (newMonth: string) => {
     setSelectedMonth(newMonth)
-    setBalanceDate(undefined)
-  }
+}
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['dashboard', 'summary', selectedMonth, balanceDate],
-    queryFn: () => dashboard.summary(monthParam, balanceDate),
+    queryKey: ['dashboard', 'summary', selectedMonth],
+    queryFn: () => dashboard.summary(monthParam),
   })
 
   const { data: spending, isLoading: spendingLoading } = useQuery({
@@ -349,13 +346,12 @@ export default function DashboardPage() {
                 <Calendar
                   mode="single"
                   locale={dateFnsLocale}
-                  selected={new Date((balanceDate ?? `${selectedMonth}-01`) + 'T00:00:00')}
+                  selected={new Date(`${selectedMonth}-01T00:00:00`)}
                   defaultMonth={new Date(`${selectedMonth}-01T00:00:00`)}
                   onSelect={(date) => {
                     if (!date) return
                     const newMonth = format(date, 'yyyy-MM')
                     setSelectedMonth(newMonth)
-                    setBalanceDate(format(date, 'yyyy-MM-dd'))
                     setHeaderCalOpen(false)
                   }}
                 />
@@ -418,34 +414,6 @@ export default function DashboardPage() {
                         ))}
                       </div>
                     )}
-                    <Popover open={balanceCalOpen} onOpenChange={setBalanceCalOpen}>
-                      <PopoverTrigger asChild>
-                        <button className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors cursor-pointer p-0 bg-transparent border-none outline-none">
-                          <CalendarIcon className="size-3" />
-                          {(() => {
-                            const dateStr = balanceDate ?? summary?.balance_date ?? ''
-                            if (!dateStr) return ''
-                            return new Date(dateStr + 'T00:00:00').toLocaleDateString(locale)
-                          })()}
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent align="start" className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          locale={dateFnsLocale}
-                          selected={(() => {
-                            const dateStr = balanceDate ?? summary?.balance_date ?? ''
-                            return dateStr ? new Date(dateStr + 'T00:00:00') : undefined
-                          })()}
-                          defaultMonth={new Date(`${selectedMonth}-01T00:00:00`)}
-                          onSelect={(date) => {
-                            if (!date) return
-                            setBalanceDate(format(date, 'yyyy-MM-dd'))
-                            setBalanceCalOpen(false)
-                          }}
-                        />
-                      </PopoverContent>
-                    </Popover>
                   </div>
                 )}
               </div>

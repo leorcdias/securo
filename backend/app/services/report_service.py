@@ -501,19 +501,22 @@ async def get_income_expenses_report(
         )
         .group_by(Category.id, Category.name, Category.color, Transaction.type)
     )
-    composition: list[ReportCompositionItem] = []
+
+    # Collect composition into a mutable map so projections can be added
+    # Key: (cat_key, group) -> {label, color, value}
+    comp_map: dict[tuple[str, str], dict] = {}
     for row in cat_result.all():
         cat_id, cat_name, cat_color, txn_type, total_amount = row
         amount = abs(float(total_amount or 0))
         if amount <= 0:
             continue
-        composition.append(ReportCompositionItem(
-            key=str(cat_id) if cat_id else "uncategorized",
-            label=cat_name if cat_name else "Uncategorized",
-            value=round(amount, 2),
-            color=cat_color if cat_color else "#6B7280",
-            group="income" if txn_type == "credit" else "expenses",
-        ))
+        cat_key = str(cat_id) if cat_id else "uncategorized"
+        group = "income" if txn_type == "credit" else "expenses"
+        comp_map[(cat_key, group)] = {
+            "label": cat_name if cat_name else "Uncategorized",
+            "color": cat_color if cat_color else "#6B7280",
+            "value": amount,
+        }
 
     # Build per-category trend (sparklines) for the full date range
     cat_trend_result = await session.execute(
@@ -560,6 +563,79 @@ async def get_income_expenses_report(
         cat_trend_map[map_key]["periods"][period_label] = (
             cat_trend_map[map_key]["periods"].get(period_label, 0.0) + amount
         )
+
+    # Add recurring projections to composition and category trend
+    cat_cache: dict[str, dict] = {}
+    cursor2 = start
+    while cursor2 <= today:
+        m_start, m_end = _month_range(cursor2)
+        projections = await _get_recurring_projections(session, user_id, m_start, m_end)
+        period_label = _format_date_label(cursor2, interval)
+        for proj in projections:
+            cat_id_str = str(proj["category_id"]) if proj["category_id"] else "uncategorized"
+            group = "income" if proj["type"] == "credit" else "expenses"
+
+            # Fetch category info if needed
+            if cat_id_str != "uncategorized" and cat_id_str not in cat_cache:
+                cat_row = await session.execute(
+                    select(Category.name, Category.color)
+                    .where(Category.id == proj["category_id"])
+                )
+                row = cat_row.one_or_none()
+                cat_cache[cat_id_str] = {
+                    "label": row[0] if row else "Uncategorized",
+                    "color": row[1] if row else "#6B7280",
+                }
+
+            info = cat_cache.get(cat_id_str, {"label": "Uncategorized", "color": "#6B7280"})
+
+            # Convert projection amount to primary currency
+            converted, _ = await fx_convert(
+                session, Decimal(str(proj["amount"])), proj["currency"], primary_currency,
+            )
+            proj_amount = float(converted)
+
+            # Add to composition map
+            comp_key = (cat_id_str, group)
+            if comp_key in comp_map:
+                comp_map[comp_key]["value"] += proj_amount
+            else:
+                comp_map[comp_key] = {
+                    "label": info["label"],
+                    "color": info["color"],
+                    "value": proj_amount,
+                }
+
+            # Add to category trend map
+            if comp_key not in cat_trend_map:
+                cat_trend_map[comp_key] = {
+                    "label": info["label"],
+                    "color": info["color"],
+                    "total": 0.0,
+                    "periods": {},
+                }
+            cat_trend_map[comp_key]["total"] += proj_amount
+            cat_trend_map[comp_key]["periods"][period_label] = (
+                cat_trend_map[comp_key]["periods"].get(period_label, 0.0) + proj_amount
+            )
+
+        if cursor2.month == 12:
+            cursor2 = date(cursor2.year + 1, 1, 1)
+        else:
+            cursor2 = date(cursor2.year, cursor2.month + 1, 1)
+
+    # Build final composition list from map
+    composition: list[ReportCompositionItem] = []
+    for (cat_key, group), info in comp_map.items():
+        if info["value"] <= 0:
+            continue
+        composition.append(ReportCompositionItem(
+            key=cat_key,
+            label=info["label"],
+            value=round(info["value"], 2),
+            color=info["color"],
+            group=group,
+        ))
 
     # Build period labels from the same points used by the trend
     period_labels = [_format_date_label(p, interval) for p in points]
