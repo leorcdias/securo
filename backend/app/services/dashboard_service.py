@@ -57,7 +57,7 @@ async def _get_recurring_projections(
         for occ_date in occurrences:
             projections.append({
                 "category_id": rec.category_id,
-                "amount": float(rec.amount_primary if rec.amount_primary is not None else rec.amount),
+                "amount": float(rec.amount),
                 "type": rec.type,
                 "currency": rec.currency,
                 "date": occ_date,
@@ -119,6 +119,10 @@ async def get_summary(
     monthly_income = float(monthly_row[0] or 0)
     monthly_expenses = float(monthly_row[1] or 0)
 
+    # Save real-only totals before adding projections (used for primary init)
+    real_monthly_income = monthly_income
+    real_monthly_expenses = monthly_expenses
+
     # Add virtual recurring projections
     projections = await _get_recurring_projections(session, user_id, month_start, month_end)
     for proj in projections:
@@ -171,8 +175,10 @@ async def get_summary(
         total_balance_primary += float(converted)
 
     # Convert income/expenses to primary currency using amount_primary when available
-    monthly_income_primary = monthly_income
-    monthly_expenses_primary = abs(monthly_expenses)
+    # Use real-only totals (without projections) to avoid double-counting;
+    # projections are added separately below via convert().
+    monthly_income_primary = real_monthly_income
+    monthly_expenses_primary = abs(real_monthly_expenses)
 
     # Use amount_primary sums for more accurate multi-currency income/expenses
     primary_result = await session.execute(
@@ -274,8 +280,10 @@ async def get_spending_by_category(
             "total": abs(float(row[4] or 0)),
         }
 
-    # Add virtual recurring projections (debit only)
+    # Add virtual recurring projections (debit only), converted to primary currency
     projections = await _get_recurring_projections(session, user_id, month_start, month_end)
+    user = await session.get(User, user_id)
+    primary_currency = user.primary_currency if user else get_settings().default_currency
     # We need category info for recurring projections — fetch categories
     cat_cache: dict[str, dict] = {}
     for proj in projections:
@@ -294,15 +302,21 @@ async def get_spending_by_category(
             else:
                 cat_cache[cat_id] = {"name": "Sem categoria", "icon": "circle-help", "color": "#6B7280"}
 
+        # Convert projection amount to primary currency
+        proj_amount, _ = await convert(
+            session, Decimal(str(proj["amount"])), proj["currency"], primary_currency,
+        )
+        proj_amount_float = float(proj_amount)
+
         if cat_id in spending_map:
-            spending_map[cat_id]["total"] += proj["amount"]
+            spending_map[cat_id]["total"] += proj_amount_float
         else:
             info = cat_cache.get(cat_id, {"name": "Sem categoria", "icon": "circle-help", "color": "#6B7280"})
             spending_map[cat_id] = {
                 "name": info["name"],
                 "icon": info["icon"],
                 "color": info["color"],
-                "total": proj["amount"],
+                "total": proj_amount_float,
             }
 
     # Convert to list and compute percentages
@@ -602,14 +616,20 @@ async def get_balance_history(
     current_deltas = await _daily_deltas(session, user_id, month_start, month_end)
     prev_deltas = await _daily_deltas(session, user_id, prev_month_start, prev_month_end)
 
-    # Recurring projections for future days of current month
+    # Recurring projections for future days of current month (converted to primary currency)
     proj_deltas: dict[int, float] = {}
     if month_end > today:
+        user = await session.get(User, user_id)
+        primary_currency = user.primary_currency if user else get_settings().default_currency
         proj_start = max(month_start, today + timedelta(days=1))
         projections = await _get_recurring_projections(session, user_id, proj_start, month_end)
         for proj in projections:
             day = proj["date"].day
-            signed = proj["amount"] if proj["type"] == "credit" else -proj["amount"]
+            proj_converted, _ = await convert(
+                session, Decimal(str(proj["amount"])), proj["currency"], primary_currency,
+            )
+            amount = float(proj_converted)
+            signed = amount if proj["type"] == "credit" else -amount
             proj_deltas[day] = proj_deltas.get(day, 0) + signed
 
     # Build current month daily balances
