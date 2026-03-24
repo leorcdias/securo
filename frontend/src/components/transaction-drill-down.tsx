@@ -244,7 +244,7 @@ export function TransactionDrillDown({
                     {item.currency !== userCurrency && item.amountPrimary != null && (
                       <div className="flex items-center justify-end gap-1">
                         {item.transaction?.fx_fallback && (
-                          <AlertTriangle size={11} className="text-amber-500 shrink-0" title={t('transactions.fxFallbackTooltip')} />
+                          <span title={t('transactions.fxFallbackTooltip')}><AlertTriangle size={11} className="text-amber-500 shrink-0" /></span>
                         )}
                         <span className="text-[10px] text-muted-foreground tabular-nums">
                           {formatCurrency(Math.abs(item.amountPrimary), userCurrency, locale)}

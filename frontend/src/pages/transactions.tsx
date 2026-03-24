@@ -421,7 +421,7 @@ export default function TransactionsPage() {
                     {tx.amount_primary != null && tx.currency !== userCurrency && (
                       <div className="flex items-center justify-end gap-1">
                         {tx.fx_fallback && (
-                          <AlertTriangle size={11} className="text-amber-500 shrink-0" title={t('transactions.fxFallbackTooltip')} />
+                          <span title={t('transactions.fxFallbackTooltip')}><AlertTriangle size={11} className="text-amber-500 shrink-0" /></span>
                         )}
                         <span className="text-[10px] text-muted-foreground tabular-nums">
                           {mask(formatCurrency(Math.abs(tx.amount_primary), userCurrency, locale))}
