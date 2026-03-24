@@ -14,12 +14,14 @@ class TransactionBase(BaseModel):
     date: _Date
     type: str  # debit, credit
     external_id: Optional[str] = None
+    currency: Optional[str] = None
+    fx_rate: Optional[Decimal] = None
 
 
 class TransactionCreate(TransactionBase):
     account_id: uuid.UUID
     category_id: Optional[uuid.UUID] = None
-    currency: str = "BRL"
+    currency: Optional[str] = None
     notes: Optional[str] = None
     amount_primary: Optional[Decimal] = None
     fx_rate_used: Optional[Decimal] = None
@@ -43,7 +45,7 @@ class TransactionRead(TransactionBase):
     account_id: Optional[uuid.UUID] = None
     category_id: Optional[uuid.UUID] = None
     category: Optional[CategoryRead] = None
-    currency: str = "BRL"
+    currency: str = "USD"
     source: str
     status: str = "posted"
     payee: Optional[str] = None
@@ -51,6 +53,7 @@ class TransactionRead(TransactionBase):
     transfer_pair_id: Optional[uuid.UUID] = None
     amount_primary: Optional[float] = None
     fx_rate_used: Optional[float] = None
+    fx_fallback: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

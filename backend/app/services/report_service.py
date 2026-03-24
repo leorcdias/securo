@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import String, select, desc, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.account import Account
 from app.models.asset import Asset
 from app.models.asset_value import AssetValue
@@ -26,7 +27,7 @@ from app.services.dashboard_service import _get_open_accounts, _account_balance_
 
 async def _asset_value_at(
     session: AsyncSession, user_id: uuid.UUID, cutoff: date,
-    primary_currency: str = "BRL",
+    primary_currency: str = "USD",
 ) -> float:
     """Sum of all active (non-archived, non-sold) asset values at a given date,
     converted to primary currency.
@@ -75,7 +76,7 @@ async def _asset_value_at(
 
 async def _net_worth_at(
     session: AsyncSession, user_id: uuid.UUID, cutoff: date,
-    primary_currency: str = "BRL",
+    primary_currency: str = "USD",
 ) -> ReportDataPoint:
     """Compute a single net worth snapshot at a given date, converted to primary currency."""
     accounts = await _get_open_accounts(session, user_id)
@@ -177,7 +178,7 @@ async def get_net_worth_report(
     user_id: uuid.UUID,
     months: int = 12,
     interval: str = "monthly",
-    currency: str = "BRL",
+    currency: str = "USD",
 ) -> ReportResponse:
     """Build a full ReportResponse for net worth over time."""
     today = date.today()
@@ -186,7 +187,7 @@ async def get_net_worth_report(
 
     # Get user's primary currency
     user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
+    primary_currency = user.primary_currency if user else get_settings().default_currency
 
     points = _date_points(start, today, interval)
 
@@ -344,7 +345,7 @@ async def get_income_expenses_report(
     user_id: uuid.UUID,
     months: int = 12,
     interval: str = "monthly",
-    currency: str = "BRL",
+    currency: str = "USD",
 ) -> ReportResponse:
     """Build a ReportResponse for income vs expenses over time."""
     today = date.today()
@@ -353,7 +354,7 @@ async def get_income_expenses_report(
 
     # Get user's primary currency
     user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
+    primary_currency = user.primary_currency if user else get_settings().default_currency
 
     label_expr = _interval_label_expr(interval).label('period')
 

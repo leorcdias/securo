@@ -18,9 +18,9 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     preferences: Mapped[Optional[dict]] = mapped_column(
         JSON,
         default=lambda: {
-            "language": "pt-BR",
-            "date_format": "DD/MM/YYYY",
-            "timezone": "America/Sao_Paulo",
+            "language": "en",
+            "date_format": "MM/DD/YYYY",
+            "timezone": "UTC",
             "currency_display": "USD",
         },
     )

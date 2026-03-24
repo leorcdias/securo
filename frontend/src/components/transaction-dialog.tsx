@@ -118,7 +118,7 @@ function TransactionForm({
 }) {
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
-  const userCurrency = user?.preferences?.currency_display ?? 'BRL'
+  const userCurrency = user?.preferences?.currency_display ?? 'USD'
   const locale = i18n.language === 'en' ? 'en-US' : i18n.language
   const { data: supportedCurrencies } = useQuery({
     queryKey: ['currencies'],

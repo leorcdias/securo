@@ -152,13 +152,16 @@ async def create_transaction(
     if not account:
         raise ValueError("Account not found")
 
+    # Resolve currency: explicit value > account currency
+    currency = data.currency or account.currency
+
     transaction = Transaction(
         user_id=user_id,
         account_id=data.account_id,
         category_id=data.category_id,  # use provided category if given
         description=data.description,
         amount=data.amount,
-        currency=data.currency,
+        currency=currency,
         date=data.date,
         type=data.type,
         source="manual",

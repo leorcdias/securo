@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy import select, func, case, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.account import Account
 from app.models.bank_connection import BankConnection
 from app.models.transaction import Transaction
@@ -161,7 +162,7 @@ async def get_summary(
 
     # Get user's primary currency
     user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
+    primary_currency = user.primary_currency if user else get_settings().default_currency
 
     # Convert totals to primary currency
     total_balance_primary = 0.0
@@ -366,7 +367,7 @@ async def get_projected_transactions(
 
     # Get user's primary currency for live conversion
     user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
+    primary_currency = user.primary_currency if user else get_settings().default_currency
 
     result = await session.execute(
         select(RecurringTransaction)
@@ -542,7 +543,7 @@ async def _balance_at(
 
     # Convert to primary currency
     user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
+    primary_currency = user.primary_currency if user else get_settings().default_currency
 
     total = 0.0
     for currency, amount in totals.items():

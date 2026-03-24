@@ -55,7 +55,7 @@ export const setup = {
     const { data } = await api.get('/setup/status')
     return data
   },
-  createAdmin: async (email: string, password: string, currency = 'BRL', name = '', language = 'pt-BR'): Promise<{ access_token: string }> => {
+  createAdmin: async (email: string, password: string, currency = 'USD', name = '', language = 'en'): Promise<{ access_token: string }> => {
     const { data } = await api.post('/setup/create-admin', { email, password, currency, name, language })
     return data
   },
@@ -445,7 +445,7 @@ export const reports = {
 
 // Currencies
 export const currencies = {
-  list: async (): Promise<{ code: string; symbol: string; name: string }[]> => {
+  list: async (): Promise<{ code: string; symbol: string; name: string; flag: string }[]> => {
     const { data } = await api.get('/currencies')
     return data
   },

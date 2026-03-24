@@ -8,6 +8,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from app.core.config import get_settings
 from app.models.fx_rate import FxRate
 from app.models.user import User
 from app.providers.openexchangerates import OpenExchangeRatesProvider
@@ -236,8 +237,8 @@ async def stamp_primary_amount(
     if not user:
         return
 
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL")
-    obj_currency = getattr(obj, currency_field, "BRL")
+    primary_currency = user.primary_currency
+    obj_currency = getattr(obj, currency_field, get_settings().default_currency)
     obj_amount = getattr(obj, amount_field, None)
 
     if obj_amount is None:

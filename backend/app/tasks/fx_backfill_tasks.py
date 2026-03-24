@@ -56,14 +56,15 @@ async def _backfill_primary_amounts() -> dict:
 
         # 2. Get all users
         users_result = await session.execute(select(User))
-        users = {u.id: (u.preferences or {}).get("currency_display", "BRL") for u in users_result.scalars().all()}
+        settings = get_settings()
+        users = {u.id: (u.preferences or {}).get("currency_display", settings.default_currency) for u in users_result.scalars().all()}
 
         # 3. Backfill transactions
         tx_result = await session.execute(
             select(Transaction).where(Transaction.amount_primary.is_(None))
         )
         for tx in tx_result.scalars().all():
-            primary_currency = users.get(tx.user_id, "BRL")
+            primary_currency = users.get(tx.user_id, settings.default_currency)
             try:
                 converted, rate = await convert(
                     session, Decimal(str(tx.amount)),
@@ -81,7 +82,7 @@ async def _backfill_primary_amounts() -> dict:
             select(RecurringTransaction).where(RecurringTransaction.amount_primary.is_(None))
         )
         for rec in rec_result.scalars().all():
-            primary_currency = users.get(rec.user_id, "BRL")
+            primary_currency = users.get(rec.user_id, settings.default_currency)
             try:
                 converted, rate = await convert(
                     session, Decimal(str(rec.amount)),
@@ -102,7 +103,7 @@ async def _backfill_primary_amounts() -> dict:
             )
         )
         for asset in asset_result.scalars().all():
-            primary_currency = users.get(asset.user_id, "BRL")
+            primary_currency = users.get(asset.user_id, settings.default_currency)
             try:
                 converted, _ = await convert(
                     session, Decimal(str(asset.purchase_price)),

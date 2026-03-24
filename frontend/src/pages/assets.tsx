@@ -42,11 +42,11 @@ import { PageHeader } from '@/components/page-header'
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { useAuth } from '@/contexts/auth-context'
 
-function formatCurrency(value: number, currency = 'BRL', locale = 'pt-BR') {
+function formatCurrency(value: number, currency = 'USD', locale = 'en-US') {
   try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency: currency || 'BRL' }).format(value)
+    return new Intl.NumberFormat(locale, { style: 'currency', currency: currency || 'USD' }).format(value)
   } catch {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency: 'BRL' }).format(value)
+    return new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(value)
   }
 }
 
@@ -72,7 +72,7 @@ export default function AssetsPage() {
   const locale = i18n.language === 'en' ? 'en-US' : i18n.language
   const { mask } = usePrivacyMode()
   const { user } = useAuth()
-  const userCurrency = user?.preferences?.currency_display ?? 'BRL'
+  const userCurrency = user?.preferences?.currency_display ?? 'USD'
   const queryClient = useQueryClient()
 
   const { data: supportedCurrencies } = useQuery({

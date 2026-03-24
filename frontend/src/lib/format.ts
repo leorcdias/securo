@@ -3,8 +3,8 @@
  */
 export function formatCurrency(
   value: number | null | undefined,
-  currency = 'BRL',
-  locale = 'pt-BR',
+  currency = 'USD',
+  locale = 'en-US',
 ): string {
   if (value == null) return '—'
   return new Intl.NumberFormat(locale, {

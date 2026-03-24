@@ -39,7 +39,7 @@ async def _restamp_recurring_fx() -> int:
         users = (await session.execute(select(User))).scalars().all()
         count = 0
         for user in users:
-            primary = (user.preferences or {}).get("currency_display", "BRL")
+            primary = user.primary_currency
             result = await session.execute(
                 select(RecurringTransaction).where(
                     RecurringTransaction.user_id == user.id,
