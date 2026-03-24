@@ -402,63 +402,6 @@ class TestTransactionFxIntegration:
         # USD→BRL at rate 5.0 → 20 * 5 = 100
         assert data["amount_primary"] == 100.00
         assert data["fx_rate_used"] is not None
-        assert data["fx_fallback"] is False
-
-    @pytest.mark.asyncio
-    async def test_fx_fallback_true_when_no_rates(
-        self,
-        client: AsyncClient,
-        auth_headers,
-        test_user: User,
-        session: AsyncSession,
-    ):
-        """Creating a foreign-currency tx with no FX rates → fx_fallback=True."""
-        jpy_account = await _make_account(
-            session, test_user, currency="JPY", name="Test JPY Account"
-        )
-
-        mock_sync = AsyncMock(return_value=0)
-        with patch("app.services.fx_rate_service.sync_rates", mock_sync):
-            response = await client.post(
-                "/api/transactions",
-                headers=auth_headers,
-                json={
-                    "account_id": str(jpy_account.id),
-                    "description": "Tokyo dinner",
-                    "amount": "5000",
-                    "date": date.today().isoformat(),
-                    "type": "debit",
-                    "currency": "JPY",
-                },
-            )
-        assert response.status_code == 201
-        data = response.json()
-        assert data["fx_rate_used"] == 1.0
-        assert data["fx_fallback"] is True
-
-    @pytest.mark.asyncio
-    async def test_fx_fallback_false_same_currency(
-        self,
-        client: AsyncClient,
-        auth_headers,
-        test_account: Account,
-    ):
-        """Same-currency transaction → fx_fallback is False (not a cross-currency pair)."""
-        response = await client.post(
-            "/api/transactions",
-            headers=auth_headers,
-            json={
-                "account_id": str(test_account.id),
-                "description": "Mercado",
-                "amount": "150.00",
-                "date": date.today().isoformat(),
-                "type": "debit",
-            },
-        )
-        assert response.status_code == 201
-        data = response.json()
-        assert data["fx_rate_used"] == 1.0
-        assert data["fx_fallback"] is False
 
 
 # ═══════════════════════════════════════════════════════════════════════════

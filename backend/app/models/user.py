@@ -21,10 +21,16 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
             "language": "pt-BR",
             "date_format": "DD/MM/YYYY",
             "timezone": "America/Sao_Paulo",
-            "currency_display": "BRL",
+            "currency_display": "USD",
         },
     )
 
     categories: Mapped[list["Category"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     category_groups: Mapped[list["CategoryGroup"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     bank_connections: Mapped[list["BankConnection"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def primary_currency(self) -> str:
+        """Return the user's configured primary currency."""
+        from app.core.config import get_settings
+        return (self.preferences or {}).get("currency_display", get_settings().default_currency)

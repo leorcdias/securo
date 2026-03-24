@@ -51,7 +51,7 @@ async def list_transactions(
         session, user.id, account_id, category_id, from_date, to_date, page, limit,
         include_opening_balance, search=q, uncategorized=uncategorized, txn_type=type,
     )
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL")
+    primary_currency = user.primary_currency
     items = [_tag_fx_fallback(TransactionRead.model_validate(tx, from_attributes=True), primary_currency) for tx in transactions]
     return PaginatedTransactions(items=items, total=total, page=page, limit=limit)
 
@@ -124,7 +124,7 @@ async def get_transaction(
     transaction = await transaction_service.get_transaction(session, transaction_id, user.id)
     if not transaction:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL")
+    primary_currency = user.primary_currency
     return _tag_fx_fallback(TransactionRead.model_validate(transaction, from_attributes=True), primary_currency)
 
 
@@ -137,7 +137,7 @@ async def create_transaction(
     try:
         transaction = await transaction_service.create_transaction(session, user.id, data)
         full_tx = await transaction_service.get_transaction(session, transaction.id, user.id)
-        primary_currency = (user.preferences or {}).get("currency_display", "BRL")
+        primary_currency = user.primary_currency
         return _tag_fx_fallback(TransactionRead.model_validate(full_tx, from_attributes=True), primary_currency)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -153,7 +153,7 @@ async def update_transaction(
     transaction = await transaction_service.update_transaction(session, transaction_id, user.id, data)
     if not transaction:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL")
+    primary_currency = user.primary_currency
     return _tag_fx_fallback(TransactionRead.model_validate(transaction, from_attributes=True), primary_currency)
 
 

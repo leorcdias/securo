@@ -20,7 +20,7 @@ class Asset(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     name: Mapped[str] = mapped_column(String(255))
     type: Mapped[str] = mapped_column(String(50))  # real_estate, vehicle, valuable, investment, other
-    currency: Mapped[str] = mapped_column(String(3), default="BRL")
+    currency: Mapped[str] = mapped_column(String(3), default="USD")
     units: Mapped[Optional[Decimal]] = mapped_column(Numeric(precision=15, scale=6), nullable=True)
     valuation_method: Mapped[str] = mapped_column(String(20), default="manual")  # manual, growth_rule
     purchase_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)

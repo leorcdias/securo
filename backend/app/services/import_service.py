@@ -10,7 +10,6 @@ from ofxparse import OfxParser
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.account import Account
 from app.models.transaction import Transaction
 from app.schemas.transaction import TransactionBase
 from app.services.rule_service import apply_rules_to_transaction
@@ -23,8 +22,6 @@ def parse_ofx(content: bytes) -> list[TransactionBase]:
     transactions = []
 
     for account in ofx.accounts:
-        # Extract account currency from OFX (CURDEF tag)
-        acct_currency = getattr(account.statement, 'currency', None) or None
         for txn in account.statement.transactions:
             transactions.append(TransactionBase(
                 description=txn.memo or txn.payee or "Unknown",
@@ -32,7 +29,6 @@ def parse_ofx(content: bytes) -> list[TransactionBase]:
                 date=txn.date.date() if hasattr(txn.date, 'date') else txn.date,
                 type="credit" if txn.amount > 0 else "debit",
                 external_id=getattr(txn, 'id', None),
-                currency=acct_currency,
             ))
 
     return transactions
@@ -125,7 +121,7 @@ def parse_camt(content: bytes) -> list[TransactionBase]:
     # Navigate: Document > BkToCstmrStmt > Stmt > Ntry
     for stmt in findall(root, 'BkToCstmrStmt/Stmt'):
         for ntry in findall(stmt, 'Ntry'):
-            # Amount and currency
+            # Amount
             amt_el = find(ntry, 'Amt')
             if amt_el is None:
                 continue
@@ -133,8 +129,6 @@ def parse_camt(content: bytes) -> list[TransactionBase]:
                 amount = Decimal(amt_el.text)
             except Exception:
                 continue
-            # Extract currency from Ccy attribute (e.g. <Amt Ccy="USD">)
-            txn_currency = amt_el.get('Ccy') or None
 
             # Credit/Debit indicator
             cdt_dbt = find_text(ntry, 'CdtDbtInd')
@@ -163,7 +157,6 @@ def parse_camt(content: bytes) -> list[TransactionBase]:
                 amount=abs(amount),
                 date=txn_date,
                 type=txn_type,
-                currency=txn_currency,
             ))
 
     return transactions
@@ -204,8 +197,6 @@ def parse_csv(
     date_cols = ['date', 'data', 'dt', 'transaction_date', 'data_transacao']
     desc_cols = ['description', 'descricao', 'desc', 'memo', 'historico', 'lancamento']
     amount_cols = ['amount', 'valor', 'value', 'quantia']
-    currency_cols = ['currency', 'moeda', 'cur', 'currency_code']
-    fx_rate_cols = ['fx_rate', 'taxa_cambio', 'exchange_rate', 'taxa', 'rate']
 
     def find_col(candidates):
         for c in candidates:
@@ -215,8 +206,6 @@ def parse_csv(
 
     date_col = find_col(date_cols)
     desc_col = find_col(desc_cols)
-    currency_col = find_col(currency_cols)
-    fx_rate_col = find_col(fx_rate_cols)
 
     # In split mode, we don't require a single amount column
     use_split = inflow_column and outflow_column
@@ -295,24 +284,11 @@ def parse_csv(
             txn_type = "credit" if amount > 0 else "debit"
             amount = abs(amount)
 
-        # Extract optional currency and fx_rate
-        txn_currency = row.get(currency_col, '').strip().upper() if currency_col else None
-        txn_fx_rate = None
-        if fx_rate_col:
-            rate_str = normalize_amount(row.get(fx_rate_col, ''))
-            if rate_str:
-                try:
-                    txn_fx_rate = Decimal(rate_str)
-                except Exception:
-                    pass
-
         transactions.append(TransactionBase(
             description=row[desc_col].strip(),
             amount=abs(amount),
             date=txn_date,
             type=txn_type,
-            currency=txn_currency or None,
-            fx_rate=txn_fx_rate,
         ))
 
     return transactions
@@ -327,21 +303,8 @@ async def import_transactions(
     filename: str = "",
     detected_format: str = "",
 ) -> tuple[int, int, uuid.UUID]:
-    """Import transactions into an account. Returns (imported, skipped, import_log_id).
-
-    Currency resolution order per transaction:
-    1. Currency from parsed file (CSV column, OFX CURDEF, CAMT Ccy attribute)
-    2. Account's currency
-    3. "BRL" as final fallback
-
-    If the file also provides an fx_rate, it is used directly instead of
-    looking up a rate from the FX rate table.
-    """
+    """Import transactions into an account. Returns (imported, skipped, import_log_id)."""
     from app.models.import_log import ImportLog
-
-    # Get account currency as default
-    account = await session.get(Account, account_id)
-    account_currency = account.currency if account else "BRL"
 
     # Calculate summaries
     total_credit = sum(t.amount for t in transactions if t.type == "credit")
@@ -363,9 +326,6 @@ async def import_transactions(
     imported = 0
     skipped = 0
     for txn_data in transactions:
-        # Resolve currency: parsed value > account currency > BRL
-        txn_currency = txn_data.currency or account_currency
-
         # Duplicate detection: use external_id when available (OFX FITID),
         # fall back to field-based matching for formats without unique IDs
         if txn_data.external_id:
@@ -394,30 +354,16 @@ async def import_transactions(
             account_id=account_id,
             description=txn_data.description,
             amount=txn_data.amount,
-            currency=txn_currency,
             date=txn_data.date,
             type=txn_data.type,
             source=source,
             import_id=import_log.id,
             external_id=txn_data.external_id,
         )
-
-        # If the file provided an fx_rate, apply it directly
-        if txn_data.fx_rate is not None:
-            transaction.fx_rate_used = txn_data.fx_rate
-            transaction.amount_primary = (txn_data.amount * txn_data.fx_rate).quantize(Decimal("0.01"))
-        else:
-            # No rate provided — stamp_primary_amount will auto-convert
-            pass
-
         session.add(transaction)
         await session.flush()
         await apply_rules_to_transaction(session, user_id, transaction)
-
-        # Only auto-stamp if we didn't already set the primary amount from file
-        if txn_data.fx_rate is None:
-            await stamp_primary_amount(session, user_id, transaction)
-
+        await stamp_primary_amount(session, user_id, transaction)
         imported += 1
 
     # Update import log with actual imported count

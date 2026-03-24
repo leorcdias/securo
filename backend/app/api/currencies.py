@@ -5,21 +5,21 @@ from app.core.config import get_settings
 router = APIRouter(prefix="/api/currencies", tags=["currencies"])
 
 CURRENCY_META = {
-    "BRL": {"symbol": "R$", "name": "Real Brasileiro", "flag": "\U0001F1E7\U0001F1F7"},
-    "USD": {"symbol": "$", "name": "US Dollar", "flag": "\U0001F1FA\U0001F1F8"},
-    "EUR": {"symbol": "\u20ac", "name": "Euro", "flag": "\U0001F1EA\U0001F1FA"},
-    "GBP": {"symbol": "\u00a3", "name": "British Pound", "flag": "\U0001F1EC\U0001F1E7"},
-    "JPY": {"symbol": "\u00a5", "name": "Japanese Yen", "flag": "\U0001F1EF\U0001F1F5"},
-    "CAD": {"symbol": "C$", "name": "Canadian Dollar", "flag": "\U0001F1E8\U0001F1E6"},
-    "AUD": {"symbol": "A$", "name": "Australian Dollar", "flag": "\U0001F1E6\U0001F1FA"},
-    "CHF": {"symbol": "Fr", "name": "Swiss Franc", "flag": "\U0001F1E8\U0001F1ED"},
-    "CNY": {"symbol": "\u00a5", "name": "Chinese Yuan", "flag": "\U0001F1E8\U0001F1F3"},
-    "ARS": {"symbol": "$", "name": "Peso Argentino", "flag": "\U0001F1E6\U0001F1F7"},
-    "MXN": {"symbol": "$", "name": "Peso Mexicano", "flag": "\U0001F1F2\U0001F1FD"},
-    "CLP": {"symbol": "$", "name": "Peso Chileno", "flag": "\U0001F1E8\U0001F1F1"},
-    "COP": {"symbol": "$", "name": "Peso Colombiano", "flag": "\U0001F1E8\U0001F1F4"},
-    "PEN": {"symbol": "S/", "name": "Sol Peruano", "flag": "\U0001F1F5\U0001F1EA"},
-    "UYU": {"symbol": "$U", "name": "Peso Uruguayo", "flag": "\U0001F1FA\U0001F1FE"},
+    "BRL": {"symbol": "R$", "name": "Real Brasileiro"},
+    "USD": {"symbol": "$", "name": "US Dollar"},
+    "EUR": {"symbol": "€", "name": "Euro"},
+    "GBP": {"symbol": "£", "name": "British Pound"},
+    "JPY": {"symbol": "¥", "name": "Japanese Yen"},
+    "CAD": {"symbol": "C$", "name": "Canadian Dollar"},
+    "AUD": {"symbol": "A$", "name": "Australian Dollar"},
+    "CHF": {"symbol": "Fr", "name": "Swiss Franc"},
+    "CNY": {"symbol": "¥", "name": "Chinese Yuan"},
+    "ARS": {"symbol": "$", "name": "Peso Argentino"},
+    "MXN": {"symbol": "$", "name": "Peso Mexicano"},
+    "CLP": {"symbol": "$", "name": "Peso Chileno"},
+    "COP": {"symbol": "$", "name": "Peso Colombiano"},
+    "PEN": {"symbol": "S/", "name": "Sol Peruano"},
+    "UYU": {"symbol": "$U", "name": "Peso Uruguayo"},
 }
 
 
@@ -36,7 +36,6 @@ async def list_currencies():
             "code": code,
             "symbol": meta.get("symbol", code),
             "name": meta.get("name", code),
-            "flag": meta.get("flag", ""),
         })
 
     return currencies

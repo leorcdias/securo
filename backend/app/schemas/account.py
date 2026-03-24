@@ -10,7 +10,7 @@ class AccountBase(BaseModel):
     name: str
     type: str
     balance: Decimal
-    currency: str = "BRL"
+    currency: str = "USD"
 
 
 class AccountCreate(BaseModel):
@@ -18,7 +18,7 @@ class AccountCreate(BaseModel):
     type: str
     balance: Decimal = Decimal("0.00")
     balance_date: Optional[date] = None
-    currency: str = "BRL"
+    currency: str = "USD"
 
 
 class AccountUpdate(BaseModel):

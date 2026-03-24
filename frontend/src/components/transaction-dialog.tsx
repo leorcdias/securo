@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/auth-context'
 import { currencies as currenciesApi } from '@/lib/api'
-import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -269,8 +268,8 @@ function TransactionForm({
             onChange={(e) => handleCurrencyChange(e.target.value)}
             disabled={isSynced}
           >
-            {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency, flag: '' }]).map((c) => (
-              <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+            {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency }]).map((c) => (
+              <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
             ))}
           </select>
         </div>
@@ -290,12 +289,6 @@ function TransactionForm({
             <span className="text-sm font-medium">{t('transactions.conversion')}</span>
             <span className="text-xs text-muted-foreground ml-2">({t('transactions.conversionHint')})</span>
           </div>
-          {transaction?.fx_fallback && (
-            <div className="flex items-center gap-2 p-2 text-xs bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md text-amber-700 dark:text-amber-400">
-              <AlertTriangle size={14} className="shrink-0" />
-              {t('transactions.fxFallbackWarning')}
-            </div>
-          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label className="text-xs">{t('transactions.convertedAmount', { currency: userCurrency })}</Label>

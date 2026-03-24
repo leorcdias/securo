@@ -93,7 +93,6 @@ export interface Transaction {
   transfer_pair_id: string | null
   amount_primary: number | null
   fx_rate_used: number | null
-  fx_fallback?: boolean
 }
 
 export interface RuleCondition {
@@ -247,9 +246,7 @@ export interface Asset {
   is_archived: boolean
   position: number
   current_value: number | null
-  current_value_primary: number | null
   gain_loss: number | null
-  gain_loss_primary: number | null
   value_count: number
 }
 

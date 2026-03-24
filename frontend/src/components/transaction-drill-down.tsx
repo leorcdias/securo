@@ -2,7 +2,7 @@ import { useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { transactions as transactionsApi, dashboard } from '@/lib/api'
-import { AlertTriangle, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { CategoryIcon } from '@/components/category-icon'
 import { useAuth } from '@/contexts/auth-context'
 import type { Transaction } from '@/types'
@@ -30,7 +30,6 @@ type DisplayItem = {
   categoryColor: string | null
   isProjected: boolean
   transaction: Transaction | null
-  fxFallback: boolean
 }
 
 function formatCurrency(value: number, currency = 'BRL', locale = 'pt-BR') {
@@ -94,7 +93,6 @@ export function TransactionDrillDown({
         categoryColor: tx.category?.color ?? null,
         isProjected: false,
         transaction: tx,
-        fxFallback: !!tx.fx_fallback,
       })
     }
 
@@ -119,7 +117,6 @@ export function TransactionDrillDown({
         categoryColor: pt.category_color ?? null,
         isProjected: true,
         transaction: null,
-        fxFallback: false,
       })
     }
 
@@ -245,11 +242,8 @@ export function TransactionDrillDown({
                       {formatCurrency(Math.abs(item.amount), item.currency ?? userCurrency, locale)}
                     </span>
                     {item.currency !== userCurrency && item.amountPrimary != null && (
-                      <span className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground tabular-nums">
+                      <span className="block text-[10px] text-muted-foreground tabular-nums">
                         {formatCurrency(Math.abs(item.amountPrimary), userCurrency, locale)}
-                        {item.fxFallback && (
-                          <AlertTriangle size={12} className="text-amber-500 shrink-0" title={t('transactions.fxFallbackTooltip')} />
-                        )}
                       </span>
                     )}
                   </div>

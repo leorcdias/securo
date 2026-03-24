@@ -132,10 +132,7 @@
     "conversionHint": "opcional — deixe em branco para taxa automática",
     "convertedAmount": "Valor em {{currency}}",
     "exchangeRate": "Taxa de câmbio",
-    "autoCalculated": "automático",
-    "fxFallbackWarning": "Taxa de câmbio indisponível — usando taxa padrão (1:1). Defina manualmente.",
-    "fxFallbackToast": "Taxa de câmbio não disponível para {{currency}}. Valor salvo com taxa padrão.",
-    "fxFallbackTooltip": "Taxa padrão (1:1) — taxa real indisponível"
+    "autoCalculated": "automático"
   },
   "accounts": {
     "title": "Contas",

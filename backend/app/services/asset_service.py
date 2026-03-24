@@ -8,9 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.asset_value import AssetValue
-from app.models.user import User
 from app.schemas.asset import AssetCreate, AssetUpdate, AssetValueCreate, AssetRead, AssetValueRead
-from app.services.fx_rate_service import stamp_primary_amount, convert as fx_convert
+from app.services.fx_rate_service import stamp_primary_amount
 
 
 def _next_due_date(last_date: date, frequency: str) -> date:
@@ -83,30 +82,12 @@ def _generate_growth_values(
     return values
 
 
-async def _asset_to_read(
-    session: AsyncSession, asset: Asset, latest_value: Optional[AssetValue],
-    value_count: int, primary_currency: str,
-) -> AssetRead:
+def _asset_to_read(asset: Asset, latest_value: Optional[AssetValue], value_count: int) -> AssetRead:
     """Convert an Asset model + computed fields to AssetRead schema."""
     current_value = _compute_current_value(asset, latest_value)
     gain_loss = None
     if current_value is not None and asset.purchase_price is not None:
         gain_loss = current_value - float(asset.purchase_price)
-
-    # Compute primary currency equivalents for foreign-currency assets
-    current_value_primary = None
-    gain_loss_primary = None
-    asset_currency = asset.currency or primary_currency
-    if asset_currency != primary_currency and current_value is not None:
-        converted, _ = await fx_convert(
-            session, Decimal(str(current_value)), asset_currency, primary_currency,
-        )
-        current_value_primary = float(converted)
-        if gain_loss is not None:
-            gl_converted, _ = await fx_convert(
-                session, Decimal(str(abs(gain_loss))), asset_currency, primary_currency,
-            )
-            gain_loss_primary = float(gl_converted) if gain_loss >= 0 else -float(gl_converted)
 
     return AssetRead(
         id=asset.id,
@@ -127,9 +108,7 @@ async def _asset_to_read(
         is_archived=asset.is_archived,
         position=asset.position,
         current_value=current_value,
-        current_value_primary=current_value_primary,
         gain_loss=gain_loss,
-        gain_loss_primary=gain_loss_primary,
         value_count=value_count,
     )
 
@@ -157,9 +136,6 @@ async def get_assets(
     session: AsyncSession, user_id: uuid.UUID, include_archived: bool = False
 ) -> list[AssetRead]:
     """List all assets for a user with computed current_value."""
-    user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
-
     query = select(Asset).where(Asset.user_id == user_id)
     if not include_archived:
         query = query.where(Asset.is_archived == False)
@@ -172,7 +148,7 @@ async def get_assets(
     for asset in assets:
         latest = await _get_latest_value(session, asset.id)
         count = await _get_value_count(session, asset.id)
-        reads.append(await _asset_to_read(session, asset, latest, count, primary_currency))
+        reads.append(_asset_to_read(asset, latest, count))
     return reads
 
 
@@ -180,9 +156,6 @@ async def get_asset(
     session: AsyncSession, asset_id: uuid.UUID, user_id: uuid.UUID
 ) -> Optional[AssetRead]:
     """Get a single asset with computed fields."""
-    user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
-
     result = await session.execute(
         select(Asset).where(Asset.id == asset_id, Asset.user_id == user_id)
     )
@@ -191,7 +164,7 @@ async def get_asset(
         return None
     latest = await _get_latest_value(session, asset.id)
     count = await _get_value_count(session, asset.id)
-    return await _asset_to_read(session, asset, latest, count, primary_currency)
+    return _asset_to_read(asset, latest, count)
 
 
 async def create_asset(
@@ -265,11 +238,9 @@ async def create_asset(
 
     await session.commit()
     await session.refresh(asset)
-    user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
     latest = await _get_latest_value(session, asset.id)
     count = await _get_value_count(session, asset.id)
-    return await _asset_to_read(session, asset, latest, count, primary_currency)
+    return _asset_to_read(asset, latest, count)
 
 
 async def update_asset(
@@ -332,11 +303,9 @@ async def update_asset(
 
     await session.commit()
     await session.refresh(asset)
-    user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
     latest = await _get_latest_value(session, asset.id)
     count = await _get_value_count(session, asset.id)
-    return await _asset_to_read(session, asset, latest, count, primary_currency)
+    return _asset_to_read(asset, latest, count)
 
 
 async def delete_asset(
@@ -438,11 +407,7 @@ async def get_portfolio_trend(
     session: AsyncSession, user_id: uuid.UUID
 ) -> dict:
     """Get portfolio trend data for stacked area chart.
-    Returns asset metadata + pivoted trend with fill-forward values.
-    All values are converted to the user's primary currency."""
-    user = await session.get(User, user_id)
-    primary_currency = (user.preferences or {}).get("currency_display", "BRL") if user else "BRL"
-
+    Returns asset metadata + pivoted trend with fill-forward values."""
     result = await session.execute(
         select(Asset).where(
             Asset.user_id == user_id,
@@ -457,14 +422,12 @@ async def get_portfolio_trend(
 
     # Collect all values per asset and all unique dates
     asset_meta = []
-    asset_currencies: dict[str, str] = {}
     asset_values_map: dict[str, list[tuple[date, float]]] = {}
     all_dates: set[date] = set()
 
     for asset in active_assets:
         aid = str(asset.id)
         asset_meta.append({"id": aid, "name": asset.name, "type": asset.type})
-        asset_currencies[aid] = asset.currency or primary_currency
 
         rows = await session.execute(
             select(AssetValue.date, AssetValue.amount)
@@ -486,17 +449,6 @@ async def get_portfolio_trend(
         return {"assets": asset_meta, "trend": [], "total": 0.0}
 
     sorted_dates = sorted(all_dates)
-
-    # Pre-compute FX rates for foreign currency assets (use latest rate for chart)
-    fx_rates: dict[str, float] = {}
-    for aid, cur in asset_currencies.items():
-        if cur != primary_currency:
-            converted, rate = await fx_convert(
-                session, Decimal("1"), cur, primary_currency,
-            )
-            fx_rates[aid] = float(converted)
-        else:
-            fx_rates[aid] = 1.0
 
     # Build lookup: aid -> {date: value}
     value_lookup: dict[str, dict[date, float]] = {}
@@ -520,7 +472,7 @@ async def get_portfolio_trend(
                 last_known[aid] = value_lookup[aid][d]
             # Use 0 before asset exists (stacking needs numeric values)
             if aid in first_date and d >= first_date[aid]:
-                val = round(last_known[aid] * fx_rates[aid], 2)
+                val = round(last_known[aid], 2)
             else:
                 val = 0
             row[aid] = val
@@ -528,8 +480,8 @@ async def get_portfolio_trend(
         row["_total"] = round(date_total, 2)
         trend.append(row)
 
-    # Total = sum of last known values converted to primary currency
-    total = sum(last_known[a["id"]] * fx_rates[a["id"]] for a in asset_meta)
+    # Total = sum of last known values
+    total = sum(last_known[a["id"]] for a in asset_meta)
 
     return {"assets": asset_meta, "trend": trend, "total": round(total, 2)}
 

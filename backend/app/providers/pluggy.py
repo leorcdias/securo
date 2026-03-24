@@ -124,7 +124,7 @@ class PluggyProvider(BankProvider):
                     name=acc["name"],
                     type=self._map_account_type(acc.get("type", "")),
                     balance=Decimal(str(acc.get("balance", 0))),
-                    currency=acc.get("currencyCode", "BRL"),
+                    currency=acc.get("currencyCode", "USD"),
                 )
             )
 
@@ -156,7 +156,7 @@ class PluggyProvider(BankProvider):
                     name=acc["name"],
                     type=self._map_account_type(acc.get("type", "")),
                     balance=Decimal(str(acc.get("balance", 0))),
-                    currency=acc.get("currencyCode", "BRL"),
+                    currency=acc.get("currencyCode", "USD"),
                 )
             )
         return accounts
@@ -219,6 +219,7 @@ class PluggyProvider(BankProvider):
                             amount=amount,
                             date=txn_date,
                             type=txn_type,
+                            currency=txn.get("currencyCode"),
                             pluggy_category=txn.get("category"),
                             status=status,
                             payee=payee,

@@ -21,6 +21,7 @@ class TransactionData:
     amount: Decimal
     date: date
     type: str  # debit, credit
+    currency: Optional[str] = None  # ISO currency code (e.g. BRL, USD)
     pluggy_category: Optional[str] = None
     status: str = "posted"  # posted, pending
     payee: Optional[str] = None
