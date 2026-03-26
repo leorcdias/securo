@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { AlertTriangle, Download, X } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, Download } from 'lucide-react'
 import { TransactionAttachments } from '@/components/transaction-attachments'
 import type { AttachmentPreview } from '@/components/transaction-attachments'
 import type { Transaction, RecurringTransaction } from '@/types'
@@ -119,9 +119,9 @@ export function TransactionDialog({
         'transition-[max-width] duration-300',
         hasPreview ? 'sm:max-w-5xl max-w-2xl' : 'sm:max-w-2xl max-w-2xl'
       )}>
-        <div className={hasPreview ? 'sm:flex sm:gap-0 sm:h-[80vh]' : ''}>
+        <div className={isEditing ? 'sm:flex sm:gap-0 sm:h-[80vh]' : ''}>
           {/* Left column: form */}
-          <div className={hasPreview ? 'sm:flex-1 sm:min-w-0 sm:overflow-y-auto sm:pr-6' : ''}>
+          <div className={isEditing ? 'sm:flex-1 sm:min-w-0 sm:flex sm:flex-col sm:overflow-hidden sm:pr-6' : ''}>
             <DialogHeader className="mb-4">
               <DialogTitle>
                 {transaction ? t('common.edit') : t('transactions.addManual')}
@@ -146,70 +146,58 @@ export function TransactionDialog({
           </div>
 
           {/* Desktop: side panel */}
-          {hasPreview && (
-            <div className="hidden sm:flex w-[420px] shrink-0 border-l flex-col">
-              <div className="flex items-center gap-2 px-4 py-3 border-b text-sm">
-                <span className="flex-1 truncate font-medium">{preview.filename}</span>
-                <button
-                  type="button"
-                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
-                  onClick={handleDownloadPreview}
-                  title="Download"
-                >
-                  <Download size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
-                  onClick={() => handlePreviewChange(null)}
-                  title="Close"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                {preview.contentType === 'application/pdf' ? (
-                  <iframe
-                    src={`${preview.url}#toolbar=0&navpanes=0`}
-                    title={preview.filename}
-                    className="w-full h-full border-0 bg-white"
-                  />
-                ) : isImageType(preview.contentType) ? (
-                  <div className="flex items-center justify-center h-full p-4 bg-muted/30">
-                    <img
-                      src={preview.url}
-                      alt={preview.filename}
-                      className="max-h-full max-w-full rounded object-contain"
+          <div
+            className={cn(
+              'hidden sm:flex shrink-0 border-l flex-col overflow-hidden transition-[width] duration-300 ease-in-out',
+              hasPreview ? 'w-[420px]' : 'w-0 border-l-0'
+            )}
+          >
+            {preview && (
+              <>
+                <div className="flex-1 overflow-hidden">
+                  {preview.contentType === 'application/pdf' ? (
+                    <iframe
+                      src={`${preview.url}#toolbar=0&navpanes=0`}
+                      title={preview.filename}
+                      className="w-full h-full border-0 bg-white"
                     />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          )}
+                  ) : isImageType(preview.contentType) ? (
+                    <div className="flex items-center justify-center h-full p-4 bg-muted/30">
+                      <img
+                        src={preview.url}
+                        alt={preview.filename}
+                        className="max-h-full max-w-full rounded object-contain"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2 px-4 py-3 border-t text-sm shrink-0">
+                  <button
+                    type="button"
+                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+                    onClick={() => handlePreviewChange(null)}
+                    title="Close preview"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="flex-1 truncate font-medium">{preview.filename}</span>
+                  <button
+                    type="button"
+                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+                    onClick={handleDownloadPreview}
+                    title="Download"
+                  >
+                    <Download size={14} />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Mobile: full-screen overlay */}
         {hasPreview && (
-          <div className="sm:hidden fixed inset-0 z-[100] bg-background flex flex-col">
-            <div className="flex items-center gap-2 px-4 py-3 border-b text-sm shrink-0">
-              <span className="flex-1 truncate font-medium">{preview.filename}</span>
-              <button
-                type="button"
-                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={handleDownloadPreview}
-                title="Download"
-              >
-                <Download size={16} />
-              </button>
-              <button
-                type="button"
-                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={() => handlePreviewChange(null)}
-                title="Close"
-              >
-                <X size={16} />
-              </button>
-            </div>
+          <div className="sm:hidden fixed inset-0 z-[100] bg-background flex flex-col animate-in slide-in-from-right duration-200">
             <div className="flex-1 overflow-hidden">
               {preview.contentType === 'application/pdf' ? (
                 <iframe
@@ -226,6 +214,25 @@ export function TransactionDialog({
                   />
                 </div>
               ) : null}
+            </div>
+            <div className="flex items-center gap-2 px-4 py-3 border-t text-sm shrink-0">
+              <button
+                type="button"
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={() => handlePreviewChange(null)}
+                title="Close preview"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <span className="flex-1 truncate font-medium">{preview.filename}</span>
+              <button
+                type="button"
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={handleDownloadPreview}
+                title="Download"
+              >
+                <Download size={16} />
+              </button>
             </div>
           </div>
         )}
@@ -363,8 +370,13 @@ function TransactionForm({
           : undefined
         onSave(txData, recurringData)
       }}
-      className={hasPreview ? 'space-y-4 mt-4' : 'space-y-4 max-h-[85vh] overflow-y-auto'}
+      className={cn(
+        'flex flex-col',
+        !isCreating ? 'flex-1 min-h-0' : 'max-h-[85vh]',
+        hasPreview && 'mt-4'
+      )}
     >
+      <div className="space-y-4 overflow-y-auto flex-1 min-h-0 pb-2">
       {error && (
         <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
           {error}
@@ -568,7 +580,12 @@ function TransactionForm({
         </div>
       )}
 
-      <DialogFooter className={onDelete ? 'flex justify-between sm:justify-between' : ''}>
+      </div>
+
+      <DialogFooter className={cn(
+        'shrink-0 border-t pt-4 mt-2',
+        onDelete ? 'flex justify-between sm:justify-between' : ''
+      )}>
         {onDelete && (
           <Button type="button" variant="destructive" onClick={onDelete} disabled={loading}>
             {t('common.delete')}
