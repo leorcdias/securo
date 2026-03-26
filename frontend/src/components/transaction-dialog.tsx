@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/auth-context'
-import { currencies as currenciesApi } from '@/lib/api'
+import { currencies as currenciesApi, transactions as transactionsApi } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,8 +15,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Download, X } from 'lucide-react'
+import { TransactionAttachments } from '@/components/transaction-attachments'
+import type { AttachmentPreview } from '@/components/transaction-attachments'
 import type { Transaction, RecurringTransaction } from '@/types'
+import { toast } from 'sonner'
 
 export function extractApiError(error: unknown): string {
   if (
@@ -39,6 +43,10 @@ export function extractApiError(error: unknown): string {
     }
   }
   return 'An unexpected error occurred'
+}
+
+function isImageType(contentType: string): boolean {
+  return contentType.startsWith('image/')
 }
 
 export function TransactionDialog({
@@ -67,28 +75,160 @@ export function TransactionDialog({
   isSynced?: boolean
 }) {
   const { t } = useTranslation()
+  const [preview, setPreview] = useState<AttachmentPreview | null>(null)
+
+  const handlePreviewChange = useCallback((newPreview: AttachmentPreview | null) => {
+    setPreview(prev => {
+      if (prev?.url) URL.revokeObjectURL(prev.url)
+      return newPreview
+    })
+  }, [])
+
+  // Clean up preview when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setPreview(prev => {
+        if (prev?.url) URL.revokeObjectURL(prev.url)
+        return null
+      })
+    }
+  }, [open])
+
+  const handleDownloadPreview = async () => {
+    if (!preview || !transaction) return
+    try {
+      const url = await transactionsApi.attachments.downloadUrl(transaction.id, preview.attachmentId)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = preview.filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error(t('common.error'))
+    }
+  }
+
+  const isEditing = !!transaction
+  const hasPreview = isEditing && !!preview
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            {transaction ? t('common.edit') : t('transactions.addManual')}
-          </DialogTitle>
-        </DialogHeader>
-        <TransactionForm
-          key={transaction?.id ?? 'new'}
-          transaction={transaction}
-          categories={categories}
-          accounts={accounts}
-          recurringMatch={recurringMatch}
-          onSave={onSave}
-          onDelete={onDelete}
-          onCancel={onClose}
-          loading={loading}
-          error={error}
-          isSynced={isSynced}
-        />
+      <DialogContent className={cn(
+        'transition-[max-width] duration-300',
+        hasPreview ? 'sm:max-w-5xl max-w-2xl' : 'sm:max-w-2xl max-w-2xl'
+      )}>
+        <div className={hasPreview ? 'sm:flex sm:gap-0 sm:h-[80vh]' : ''}>
+          {/* Left column: form */}
+          <div className={hasPreview ? 'sm:flex-1 sm:min-w-0 sm:overflow-y-auto sm:pr-6' : ''}>
+            <DialogHeader className="mb-4">
+              <DialogTitle>
+                {transaction ? t('common.edit') : t('transactions.addManual')}
+              </DialogTitle>
+            </DialogHeader>
+            <TransactionForm
+              key={transaction?.id ?? 'new'}
+              transaction={transaction}
+              categories={categories}
+              accounts={accounts}
+              recurringMatch={recurringMatch}
+              onSave={onSave}
+              onDelete={onDelete}
+              onCancel={onClose}
+              loading={loading}
+              error={error}
+              isSynced={isSynced}
+              onPreviewChange={handlePreviewChange}
+              activePreviewId={preview?.attachmentId ?? null}
+              hasPreview={hasPreview}
+            />
+          </div>
+
+          {/* Desktop: side panel */}
+          {hasPreview && (
+            <div className="hidden sm:flex w-[420px] shrink-0 border-l flex-col">
+              <div className="flex items-center gap-2 px-4 py-3 border-b text-sm">
+                <span className="flex-1 truncate font-medium">{preview.filename}</span>
+                <button
+                  type="button"
+                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+                  onClick={handleDownloadPreview}
+                  title="Download"
+                >
+                  <Download size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+                  onClick={() => handlePreviewChange(null)}
+                  title="Close"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                {preview.contentType === 'application/pdf' ? (
+                  <iframe
+                    src={`${preview.url}#toolbar=0&navpanes=0`}
+                    title={preview.filename}
+                    className="w-full h-full border-0 bg-white"
+                  />
+                ) : isImageType(preview.contentType) ? (
+                  <div className="flex items-center justify-center h-full p-4 bg-muted/30">
+                    <img
+                      src={preview.url}
+                      alt={preview.filename}
+                      className="max-h-full max-w-full rounded object-contain"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile: full-screen overlay */}
+        {hasPreview && (
+          <div className="sm:hidden fixed inset-0 z-[100] bg-background flex flex-col">
+            <div className="flex items-center gap-2 px-4 py-3 border-b text-sm shrink-0">
+              <span className="flex-1 truncate font-medium">{preview.filename}</span>
+              <button
+                type="button"
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={handleDownloadPreview}
+                title="Download"
+              >
+                <Download size={16} />
+              </button>
+              <button
+                type="button"
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={() => handlePreviewChange(null)}
+                title="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              {preview.contentType === 'application/pdf' ? (
+                <iframe
+                  src={`${preview.url}#toolbar=0&navpanes=0`}
+                  title={preview.filename}
+                  className="w-full h-full border-0 bg-white"
+                />
+              ) : isImageType(preview.contentType) ? (
+                <div className="flex items-center justify-center h-full p-4 bg-muted/30">
+                  <img
+                    src={preview.url}
+                    alt={preview.filename}
+                    className="max-h-full max-w-full rounded object-contain"
+                  />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -105,6 +245,9 @@ function TransactionForm({
   loading,
   error,
   isSynced,
+  onPreviewChange,
+  activePreviewId,
+  hasPreview,
 }: {
   transaction: Transaction | null
   categories: { id: string; name: string; icon: string }[]
@@ -116,6 +259,9 @@ function TransactionForm({
   loading: boolean
   error: string | null
   isSynced: boolean
+  onPreviewChange: (preview: AttachmentPreview | null) => void
+  activePreviewId: string | null
+  hasPreview: boolean
 }) {
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
@@ -217,7 +363,7 @@ function TransactionForm({
           : undefined
         onSave(txData, recurringData)
       }}
-      className="space-y-4"
+      className={hasPreview ? 'space-y-4 mt-4' : 'space-y-4 max-h-[85vh] overflow-y-auto'}
     >
       {error && (
         <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
@@ -373,6 +519,14 @@ function TransactionForm({
           placeholder={t('transactions.notesPlaceholder')}
         />
       </div>
+
+      {!isCreating && transaction && (
+        <TransactionAttachments
+          transactionId={transaction.id}
+          onPreviewChange={onPreviewChange}
+          activePreviewId={activePreviewId}
+        />
+      )}
 
       {/* Recurring toggle — only shown when creating non-synced */}
       {isCreating && !isSynced && (
