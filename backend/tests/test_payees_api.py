@@ -7,7 +7,6 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account
-from app.models.payee import Payee
 from app.models.transaction import Transaction
 from app.models.user import User
 

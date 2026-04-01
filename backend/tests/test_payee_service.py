@@ -5,7 +5,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.payee import Payee, PayeeMapping
+from app.models.payee import PayeeMapping
 from app.models.transaction import Transaction
 from app.models.account import Account
 from app.models.user import User
