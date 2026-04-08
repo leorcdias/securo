@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { createElement, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { goals as goalsApi, accounts as accountsApi, assets as assetsApi, currencies as currenciesApi } from '@/lib/api'
@@ -41,8 +41,6 @@ const PRESET_COLORS = [
   '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
   '#8B5CF6', '#EC4899', '#06B6D4', '#F97316',
 ]
-
-const TH = 'text-xs font-medium text-muted-foreground py-3'
 
 function SectionCard({ children }: { children: React.ReactNode }) {
   return (
@@ -518,7 +516,7 @@ export default function GoalsPage() {
                       className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-white"
                       style={{ backgroundColor: selectedColor }}
                     >
-                      {(() => { const Icon = getGoalIcon(selectedIcon); return <Icon size={18} /> })()}
+                      {createElement(getGoalIcon(selectedIcon), { size: 18 })}
                     </div>
                     <span className="flex-1 text-muted-foreground">{t('goals.chooseIconColor')}</span>
                     <ChevronDown size={14} className="text-muted-foreground" />
