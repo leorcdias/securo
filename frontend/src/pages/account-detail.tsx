@@ -598,24 +598,22 @@ export default function AccountDetailPage() {
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {isCreditCard ? (
             <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+              <button
+                type="button"
+                className="h-8 w-8 flex items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-border hover:text-foreground transition-all"
                 onClick={() => shiftCycleBy(-1)}
                 title={t('accounts.previousCycle')}
               >
                 <ChevronLeft size={16} />
-              </Button>
+              </button>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 min-w-[140px] gap-2 capitalize"
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center gap-2 min-w-[140px] border border-border rounded-lg px-3 py-1.5 text-sm bg-card text-foreground hover:bg-muted/50 transition-all cursor-pointer capitalize"
                   >
                     {creditCardCycleLabel(filterTo, account?.payment_due_day, i18n.language)}
-                  </Button>
+                  </button>
                 </PopoverTrigger>
                 <PopoverContent align="center" className="w-auto p-3 space-y-3">
                   <div className="space-y-1.5">
@@ -636,15 +634,14 @@ export default function AccountDetailPage() {
                   </div>
                 </PopoverContent>
               </Popover>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+              <button
+                type="button"
+                className="h-8 w-8 flex items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:border-border hover:text-foreground transition-all"
                 onClick={() => shiftCycleBy(1)}
                 title={t('accounts.nextCycle')}
               >
                 <ChevronRight size={16} />
-              </Button>
+              </button>
             </div>
           ) : (
             <>
