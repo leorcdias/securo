@@ -12,6 +12,7 @@ from app.models.asset_value import AssetValue
 from app.models.transaction import Transaction
 from app.models.category import Category
 from app.models.user import User
+from app.services.admin_service import get_credit_card_accounting_mode
 from app.services.fx_rate_service import convert
 from app.schemas.report import (
     CategoryTrendItem,
@@ -353,13 +354,12 @@ async def get_income_expenses_report(
     start = date(today.year, today.month, 1) - timedelta(days=months * 30)
     start = start.replace(day=1)
 
-    # Get user's primary currency + reporting mode
+    # Get user's primary currency + global reporting mode
     user = await session.get(User, user_id)
     primary_currency = user.primary_currency if user else get_settings().default_currency
+    accounting_mode = await get_credit_card_accounting_mode(session)
     report_date = (
-        Transaction.effective_date
-        if user and user.credit_card_accounting_mode == "accrual"
-        else Transaction.date
+        Transaction.effective_date if accounting_mode == "accrual" else Transaction.date
     )
 
     label_expr = _interval_label_expr(interval, report_date).label('period')

@@ -22,7 +22,6 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
             "date_format": "MM/DD/YYYY",
             "timezone": "UTC",
             "currency_display": "USD",
-            "credit_card_accounting_mode": "cash",
         },
     )
 
@@ -38,8 +37,3 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
         """Return the user's configured primary currency."""
         from app.core.config import get_settings
         return (self.preferences or {}).get("currency_display", get_settings().default_currency)
-
-    @property
-    def credit_card_accounting_mode(self) -> str:
-        """Return 'cash' or 'accrual'. 'cash' is the default (no behavior change for existing users)."""
-        return (self.preferences or {}).get("credit_card_accounting_mode", "cash")

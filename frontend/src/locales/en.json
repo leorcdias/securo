@@ -360,15 +360,7 @@
     "theme": "Theme",
     "themeLight": "Light",
     "themeDark": "Dark",
-    "themeSystem": "System",
-    "accountingMode": "Accounting mode",
-    "accountingCash": "Cash basis",
-    "accountingCashShort": "Cash",
-    "accountingCashDesc": "Credit card purchases count on the day they happen.",
-    "accountingAccrual": "Accrual basis",
-    "accountingAccrualShort": "Accrual",
-    "accountingAccrualDesc": "Credit card purchases count on the bill's due date — matches your cash flow.",
-    "accountingModeSaved": "Accounting mode updated"
+    "themeSystem": "System"
   },
   "budgets": {
     "title": "Budgets",
@@ -792,6 +784,12 @@
       "registrationTitle": "Registration",
       "registration": "Allow user registration",
       "registrationDesc": "When disabled, only admins can create new user accounts.",
+      "accountingTitle": "Accounting",
+      "accountingSubtitle": "How credit card transactions are counted in dashboards, reports, and budgets.",
+      "accountingCash": "Cash basis",
+      "accountingCashDesc": "Credit card purchases count on the day they happen (default).",
+      "accountingAccrual": "Accrual basis",
+      "accountingAccrualDesc": "Credit card purchases count on the bill's due date — reflects actual cash flow.",
       "updated": "Setting updated"
     }
   },

@@ -12,6 +12,7 @@ from app.models.category_group import CategoryGroup
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.budget import BudgetCreate, BudgetUpdate, BudgetVsActual
+from app.services.admin_service import get_credit_card_accounting_mode
 from app.services.dashboard_service import _get_recurring_projections
 from app.services.fx_rate_service import convert
 from app.core.config import get_settings
@@ -243,10 +244,9 @@ async def get_budget_vs_actual(
     # Get user's primary currency for FX conversion + reporting mode
     user = await session.get(User, user_id)
     primary_currency = user.primary_currency if user else get_settings().default_currency
+    accounting_mode = await get_credit_card_accounting_mode(session)
     report_date = (
-        Transaction.effective_date
-        if user and user.credit_card_accounting_mode == "accrual"
-        else Transaction.date
+        Transaction.effective_date if accounting_mode == "accrual" else Transaction.date
     )
 
     # Get actual spending by category for this month (exclude transfer pairs)

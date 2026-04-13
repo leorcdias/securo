@@ -13,6 +13,7 @@ from app.models.transaction import Transaction
 from app.models.category import Category
 from app.models.recurring_transaction import RecurringTransaction
 from app.schemas.dashboard import DashboardSummary, SpendingByCategory, MonthlyTrend, ProjectedTransaction, DailyBalance, BalanceHistory
+from app.services.admin_service import get_credit_card_accounting_mode
 from app.services.recurring_transaction_service import get_occurrences_in_range
 from app.services.asset_service import get_total_asset_value
 from app.services.fx_rate_service import convert
@@ -75,14 +76,14 @@ async def get_summary(
     month_start, month_end = _month_range(month)
     today = date.today()
 
-    # Reporting mode: when the user is in "accrual" mode, aggregation queries
-    # bucket credit card transactions by the bill's due date (effective_date)
-    # instead of the purchase date — gives a true cash-flow view.
+    # Reporting mode is a global app setting (admin-controlled). When "accrual",
+    # aggregation queries bucket credit card transactions by the bill's due
+    # date (effective_date) instead of the purchase date — gives a true
+    # cash-flow view.
     user = await session.get(User, user_id)
+    accounting_mode = await get_credit_card_accounting_mode(session)
     report_date = (
-        Transaction.effective_date
-        if user and user.credit_card_accounting_mode == "accrual"
-        else Transaction.date
+        Transaction.effective_date if accounting_mode == "accrual" else Transaction.date
     )
 
     # Compute the effective cutoff date for balance calculation
@@ -254,10 +255,9 @@ async def get_spending_by_category(
     month_start, month_end = _month_range(month)
 
     user = await session.get(User, user_id)
+    accounting_mode = await get_credit_card_accounting_mode(session)
     report_date = (
-        Transaction.effective_date
-        if user and user.credit_card_accounting_mode == "accrual"
-        else Transaction.date
+        Transaction.effective_date if accounting_mode == "accrual" else Transaction.date
     )
 
     # Real transactions grouped by category (exclude transfer pairs and closed accounts)
@@ -353,11 +353,9 @@ async def get_spending_by_category(
 async def get_monthly_trend(
     session: AsyncSession, user_id: uuid.UUID, months: int = 6
 ) -> list[MonthlyTrend]:
-    user = await session.get(User, user_id)
+    accounting_mode = await get_credit_card_accounting_mode(session)
     report_date = (
-        Transaction.effective_date
-        if user and user.credit_card_accounting_mode == "accrual"
-        else Transaction.date
+        Transaction.effective_date if accounting_mode == "accrual" else Transaction.date
     )
     month_label = func.to_char(report_date, 'YYYY-MM').label('month')
     primary_amt = _primary_amount_expr()

@@ -360,15 +360,7 @@
     "theme": "Tema",
     "themeLight": "Claro",
     "themeDark": "Escuro",
-    "themeSystem": "Sistema",
-    "accountingMode": "Regime contábil",
-    "accountingCash": "Regime de caixa",
-    "accountingCashShort": "Caixa",
-    "accountingCashDesc": "Compras no cartão contam no dia em que acontecem.",
-    "accountingAccrual": "Regime de competência",
-    "accountingAccrualShort": "Comp.",
-    "accountingAccrualDesc": "Compras no cartão contam na data de vencimento da fatura — reflete o fluxo de caixa real.",
-    "accountingModeSaved": "Regime contábil atualizado"
+    "themeSystem": "Sistema"
   },
   "budgets": {
     "title": "Orçamentos",
@@ -792,6 +784,12 @@
       "registrationTitle": "Registro",
       "registration": "Permitir registro de usuários",
       "registrationDesc": "Quando desativado, apenas admins podem criar novas contas.",
+      "accountingTitle": "Contabilidade",
+      "accountingSubtitle": "Como as transações de cartão de crédito entram no painel, relatórios e orçamentos.",
+      "accountingCash": "Regime de caixa",
+      "accountingCashDesc": "Compras no cartão contam no dia em que acontecem (padrão).",
+      "accountingAccrual": "Regime de competência",
+      "accountingAccrualDesc": "Compras no cartão contam na data de vencimento da fatura — reflete o fluxo de caixa real.",
       "updated": "Configuração atualizada"
     }
   },
