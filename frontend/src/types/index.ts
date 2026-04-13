@@ -132,6 +132,10 @@ export interface Transaction {
   fx_rate_used: number | null
   fx_fallback: boolean
   attachment_count?: number
+  installment_number: number | null
+  total_installments: number | null
+  installment_total_amount: number | null
+  installment_purchase_date: string | null
 }
 
 export interface Payee {

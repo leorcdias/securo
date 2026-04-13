@@ -251,6 +251,26 @@ class PluggyProvider(BankProvider):
                         Decimal(str(abs(amt_in_acct))) if amt_in_acct is not None else None
                     )
 
+                    # Installment metadata from creditCardMetadata (parcelamento).
+                    # Pluggy reports installment_number, total, original amount and
+                    # purchase date on each charge for CC connectors that support it.
+                    cc_meta = txn.get("creditCardMetadata") or {}
+                    inst_number = cc_meta.get("installmentNumber")
+                    inst_total = cc_meta.get("totalInstallments")
+                    inst_total_amount = cc_meta.get("totalAmount")
+                    inst_purchase_date_raw = cc_meta.get("purchaseDate")
+                    inst_purchase_date: Optional[date] = None
+                    if inst_purchase_date_raw:
+                        try:
+                            inst_purchase_date = date.fromisoformat(str(inst_purchase_date_raw)[:10])
+                        except ValueError:
+                            inst_purchase_date = None
+                    inst_total_amount_dec = (
+                        Decimal(str(abs(inst_total_amount)))
+                        if inst_total_amount is not None
+                        else None
+                    )
+
                     all_transactions.append(
                         TransactionData(
                             external_id=txn["id"],
@@ -264,6 +284,10 @@ class PluggyProvider(BankProvider):
                             status=status,
                             payee=payee,
                             raw_data=txn,
+                            installment_number=inst_number if isinstance(inst_number, int) else None,
+                            total_installments=inst_total if isinstance(inst_total, int) else None,
+                            installment_total_amount=inst_total_amount_dec,
+                            installment_purchase_date=inst_purchase_date,
                         )
                     )
 

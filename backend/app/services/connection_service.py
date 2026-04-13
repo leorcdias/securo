@@ -190,6 +190,10 @@ async def handle_oauth_callback(
                 payee_id=payee_id,
                 raw_data=txn_data.raw_data,
                 category_id=category_id,
+                installment_number=txn_data.installment_number,
+                total_installments=txn_data.total_installments,
+                installment_total_amount=txn_data.installment_total_amount,
+                installment_purchase_date=txn_data.installment_purchase_date,
             )
             apply_effective_date(transaction, account)
             session.add(transaction)
@@ -470,6 +474,10 @@ async def sync_connection(
                     payee_id=sync_payee_id,
                     raw_data=txn_data.raw_data,
                     category_id=category_id,
+                    installment_number=txn_data.installment_number,
+                    total_installments=txn_data.total_installments,
+                    installment_total_amount=txn_data.installment_total_amount,
+                    installment_purchase_date=txn_data.installment_purchase_date,
                 )
                 apply_effective_date(transaction, account)
                 session.add(transaction)

@@ -33,6 +33,11 @@ class TransactionData:
     status: str = "posted"  # posted, pending
     payee: Optional[str] = None
     raw_data: Optional[dict] = None
+    # Installment metadata (parcelamento) — populated by CC providers that expose it.
+    installment_number: Optional[int] = None
+    total_installments: Optional[int] = None
+    installment_total_amount: Optional[Decimal] = None
+    installment_purchase_date: Optional[date] = None
 
 
 @dataclass
