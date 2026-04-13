@@ -34,6 +34,7 @@ export interface UserPreferences {
   currency_display?: string
   display_name?: string
   onboarding_completed?: boolean
+  credit_card_accounting_mode?: 'cash' | 'accrual'
 }
 
 export interface Category {

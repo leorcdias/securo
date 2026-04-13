@@ -64,3 +64,65 @@ def compute_available_credit(
         return None
     utilized = -current_balance if current_balance < 0 else Decimal("0")
     return credit_limit - utilized
+
+
+def apply_effective_date(transaction, account) -> None:
+    """Populate `transaction.effective_date` based on the account type.
+
+    Non-CC accounts: effective_date == transaction.date (passthrough).
+    CC accounts: effective_date is the due date of the bill the transaction
+    belongs to — see `compute_effective_date` for the cycle math.
+
+    Call this from every tx create/update path (manual, sync, import,
+    transfers, opening balances). `effective_date` is stored on every row
+    regardless of the user's reporting mode; the mode only affects which
+    date the aggregation queries read from."""
+    if account is not None and getattr(account, "type", None) == "credit_card":
+        transaction.effective_date = compute_effective_date(
+            transaction.date,
+            getattr(account, "statement_close_day", None),
+            getattr(account, "payment_due_day", None),
+        )
+    else:
+        transaction.effective_date = transaction.date
+
+
+def compute_effective_date(
+    tx_date: date,
+    statement_close_day: Optional[int],
+    payment_due_day: Optional[int],
+) -> date:
+    """Return the *cash-flow* date for a credit card transaction.
+
+    In accrual reporting mode, a credit card purchase doesn't impact cash flow
+    on the purchase date — it impacts cash flow when the bill is paid. This
+    helper computes that "effective" date:
+
+      1. Find the cycle the transaction belongs to: the next statement close
+         date on or after tx_date.
+      2. The bill for that cycle is due on the next occurrence of payment_due_day
+         strictly after the close.
+      3. Return that bill's due date.
+
+    Returns tx_date as-is when either close_day or due_day is not configured
+    (nothing we can do without the cycle metadata)."""
+    if not statement_close_day or not payment_due_day:
+        return tx_date
+
+    # Step 1: find the cycle end — the first close day on or after tx_date.
+    same_month_close = _clamp_day(tx_date.year, tx_date.month, statement_close_day)
+    if same_month_close >= tx_date:
+        cycle_end = same_month_close
+    else:
+        if tx_date.month == 12:
+            cycle_end = _clamp_day(tx_date.year + 1, 1, statement_close_day)
+        else:
+            cycle_end = _clamp_day(tx_date.year, tx_date.month + 1, statement_close_day)
+
+    # Step 2: find the bill due date — the first due day strictly after cycle_end.
+    same_month_due = _clamp_day(cycle_end.year, cycle_end.month, payment_due_day)
+    if same_month_due > cycle_end:
+        return same_month_due
+    if cycle_end.month == 12:
+        return _clamp_day(cycle_end.year + 1, 1, payment_due_day)
+    return _clamp_day(cycle_end.year, cycle_end.month + 1, payment_due_day)

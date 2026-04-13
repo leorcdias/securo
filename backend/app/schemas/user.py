@@ -11,6 +11,7 @@ class UserPreferences(BaseModel):
     timezone: str = "UTC"
     currency_display: str = "USD"
     onboarding_completed: bool = False
+    credit_card_accounting_mode: str = "cash"  # "cash" | "accrual"
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):

@@ -75,6 +75,16 @@ async def get_summary(
     month_start, month_end = _month_range(month)
     today = date.today()
 
+    # Reporting mode: when the user is in "accrual" mode, aggregation queries
+    # bucket credit card transactions by the bill's due date (effective_date)
+    # instead of the purchase date — gives a true cash-flow view.
+    user = await session.get(User, user_id)
+    report_date = (
+        Transaction.effective_date
+        if user and user.credit_card_accounting_mode == "accrual"
+        else Transaction.date
+    )
+
     # Compute the effective cutoff date for balance calculation
     if balance_date:
         cutoff = balance_date
@@ -109,8 +119,8 @@ async def get_summary(
         .where(
             Transaction.user_id == user_id,
             Account.is_closed == False,
-            Transaction.date >= month_start,
-            Transaction.date < month_end,
+            report_date >= month_start,
+            report_date < month_end,
             Transaction.source != "opening_balance",
             Transaction.transfer_pair_id.is_(None),
         )
@@ -164,8 +174,7 @@ async def get_summary(
     for currency, amount in assets_value.items():
         total_balance[currency] = total_balance.get(currency, 0.0) + amount
 
-    # Get user's primary currency
-    user = await session.get(User, user_id)
+    # Get user's primary currency (user already loaded above for reporting mode)
     primary_currency = user.primary_currency if user else get_settings().default_currency
 
     # Convert totals to primary currency
@@ -190,8 +199,8 @@ async def get_summary(
         .where(
             Transaction.user_id == user_id,
             Account.is_closed == False,
-            Transaction.date >= month_start,
-            Transaction.date < month_end,
+            report_date >= month_start,
+            report_date < month_end,
             Transaction.source != "opening_balance",
             Transaction.transfer_pair_id.is_(None),
             Transaction.amount_primary.isnot(None),
@@ -244,6 +253,13 @@ async def get_spending_by_category(
 
     month_start, month_end = _month_range(month)
 
+    user = await session.get(User, user_id)
+    report_date = (
+        Transaction.effective_date
+        if user and user.credit_card_accounting_mode == "accrual"
+        else Transaction.date
+    )
+
     # Real transactions grouped by category (exclude transfer pairs and closed accounts)
     # Use amount_primary for multi-currency support
     result = await session.execute(
@@ -261,8 +277,8 @@ async def get_spending_by_category(
             Transaction.user_id == user_id,
             Account.is_closed == False,
             Transaction.type == "debit",
-            Transaction.date >= month_start,
-            Transaction.date < month_end,
+            report_date >= month_start,
+            report_date < month_end,
             Transaction.transfer_pair_id.is_(None),
         )
         .group_by(Category.id, Category.name, Category.icon, Category.color)
@@ -282,7 +298,6 @@ async def get_spending_by_category(
 
     # Add virtual recurring projections (debit only), converted to primary currency
     projections = await _get_recurring_projections(session, user_id, month_start, month_end)
-    user = await session.get(User, user_id)
     primary_currency = user.primary_currency if user else get_settings().default_currency
     # We need category info for recurring projections — fetch categories
     cat_cache: dict[str, dict] = {}
@@ -338,7 +353,13 @@ async def get_spending_by_category(
 async def get_monthly_trend(
     session: AsyncSession, user_id: uuid.UUID, months: int = 6
 ) -> list[MonthlyTrend]:
-    month_label = func.to_char(Transaction.date, 'YYYY-MM').label('month')
+    user = await session.get(User, user_id)
+    report_date = (
+        Transaction.effective_date
+        if user and user.credit_card_accounting_mode == "accrual"
+        else Transaction.date
+    )
+    month_label = func.to_char(report_date, 'YYYY-MM').label('month')
     primary_amt = _primary_amount_expr()
     result = await session.execute(
         select(

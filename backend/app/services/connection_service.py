@@ -13,6 +13,7 @@ from app.models.category import Category
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.providers import get_provider
+from app.services.credit_card_service import apply_effective_date
 from app.services.rule_service import apply_rules_to_transaction
 from app.services.transfer_detection_service import detect_transfer_pairs
 from app.services.fx_rate_service import stamp_primary_amount
@@ -141,6 +142,7 @@ async def handle_oauth_callback(
     new_tx_ids: list[uuid.UUID] = []
 
     for acc_data in connection_data.accounts:
+        is_cc = acc_data.type == "credit_card"
         account = Account(
             user_id=user_id,
             connection_id=connection.id,
@@ -149,6 +151,12 @@ async def handle_oauth_callback(
             type=acc_data.type,
             balance=acc_data.balance,
             currency=acc_data.currency,
+            credit_limit=acc_data.credit_limit if is_cc else None,
+            statement_close_day=acc_data.statement_close_day if is_cc else None,
+            payment_due_day=acc_data.payment_due_day if is_cc else None,
+            minimum_payment=acc_data.minimum_payment if is_cc else None,
+            card_brand=acc_data.card_brand if is_cc else None,
+            card_level=acc_data.card_level if is_cc else None,
         )
         session.add(account)
         await session.flush()
@@ -183,6 +191,7 @@ async def handle_oauth_callback(
                 raw_data=txn_data.raw_data,
                 category_id=category_id,
             )
+            apply_effective_date(transaction, account)
             session.add(transaction)
             await session.flush()
             new_tx_ids.append(transaction.id)
@@ -462,6 +471,7 @@ async def sync_connection(
                     raw_data=txn_data.raw_data,
                     category_id=category_id,
                 )
+                apply_effective_date(transaction, account)
                 session.add(transaction)
                 await session.flush()
                 new_tx_ids.append(transaction.id)

@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, JSON, Numeric, String
+from sqlalchemy import Date, DateTime, ForeignKey, JSON, Numeric, String, event
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,11 @@ class Transaction(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(precision=15, scale=2))
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     date: Mapped[date] = mapped_column(Date)
+    # Effective date for cash-flow reporting. For regular accounts this equals
+    # `date`. For credit card transactions it's the due date of the bill that
+    # the transaction belongs to — so accrual-mode aggregations count the
+    # purchase when it hits the user's cash, not when it was made.
+    effective_date: Mapped[date] = mapped_column(Date, index=True)
     type: Mapped[str] = mapped_column(String(10))  # debit, credit
     source: Mapped[str] = mapped_column(String(20))  # sync, ofx, csv, manual
     status: Mapped[str] = mapped_column(String(10), default="posted")  # posted, pending
@@ -49,3 +54,19 @@ class Transaction(Base):
     attachments: Mapped[list["TransactionAttachment"]] = relationship(
         back_populates="transaction", cascade="all, delete-orphan"
     )
+
+
+# Safety net: `effective_date` is NOT NULL. For non-CC transactions it always
+# equals `date`, so if a call site (or test) forgets to set it, fall back
+# silently. CC-aware service code still calls `apply_effective_date` explicitly
+# so that cycle-based due dates are stored when the account has the metadata.
+@event.listens_for(Transaction, "before_insert")
+def _default_effective_date(mapper, connection, target):  # type: ignore
+    if target.effective_date is None:
+        target.effective_date = target.date
+
+
+@event.listens_for(Transaction, "before_update")
+def _default_effective_date_on_update(mapper, connection, target):  # type: ignore
+    if target.effective_date is None:
+        target.effective_date = target.date

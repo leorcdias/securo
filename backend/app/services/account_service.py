@@ -10,7 +10,7 @@ from app.models.account import Account
 from app.models.bank_connection import BankConnection
 from app.models.transaction import Transaction
 from app.schemas.account import AccountCreate, AccountUpdate
-from app.services.credit_card_service import compute_available_credit, get_cycle_dates
+from app.services.credit_card_service import apply_effective_date, compute_available_credit, get_cycle_dates
 
 
 async def get_accounts(session: AsyncSession, user_id: uuid.UUID, include_closed: bool = False) -> list[dict]:
@@ -173,6 +173,7 @@ async def create_account(session: AsyncSession, user_id: uuid.UUID, data: Accoun
             type=opening_type,
             source="opening_balance",
         )
+        apply_effective_date(opening_tx, account)
         session.add(opening_tx)
 
     await session.commit()
@@ -189,6 +190,13 @@ async def update_account(
 
     update_data = data.model_dump(exclude_unset=True)
     balance_date = update_data.pop("balance_date", None)
+
+    # Track whether we need to recompute effective_date for all transactions.
+    # Changes to the CC cycle days shift which bill each historical purchase
+    # belongs to, so stored effective_dates need to be rebuilt.
+    cycle_fields_changed = any(
+        k in update_data for k in ("statement_close_day", "payment_due_day")
+    )
 
     # Bank-connected accounts are managed by the sync pipeline. Only credit card
     # metadata (limit + cycle days) can be user-edited, since providers often don't
@@ -209,6 +217,8 @@ async def update_account(
             raise ValueError("Credit card fields can only be set on credit card accounts")
         for key, value in update_data.items():
             setattr(account, key, value)
+        if cycle_fields_changed:
+            await _recompute_effective_dates(session, account)
         await session.commit()
         await session.refresh(account)
         return account
@@ -242,6 +252,7 @@ async def update_account(
                 opening_tx.type = opening_type
                 if balance_date:
                     opening_tx.date = balance_date
+                apply_effective_date(opening_tx, account)
             else:
                 opening_tx = Transaction(
                     user_id=account.user_id,
@@ -253,13 +264,30 @@ async def update_account(
                     type=opening_type,
                     source="opening_balance",
                 )
+                apply_effective_date(opening_tx, account)
                 session.add(opening_tx)
         elif opening_tx:
             await session.delete(opening_tx)
 
+    if cycle_fields_changed:
+        await _recompute_effective_dates(session, account)
+
     await session.commit()
     await session.refresh(account)
     return account
+
+
+async def _recompute_effective_dates(session: AsyncSession, account: Account) -> None:
+    """Recompute effective_date on every transaction in this account.
+
+    Called when an account's CC cycle metadata (statement_close_day,
+    payment_due_day) changes, so historical transactions get rebucketed into
+    the correct bill. Cheap: a few hundred rows per account at most."""
+    result = await session.execute(
+        select(Transaction).where(Transaction.account_id == account.id)
+    )
+    for tx in result.scalars():
+        apply_effective_date(tx, account)
 
 
 async def delete_account(session: AsyncSession, account_id: uuid.UUID, user_id: uuid.UUID) -> bool:

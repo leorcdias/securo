@@ -360,7 +360,15 @@
     "theme": "Tema",
     "themeLight": "Claro",
     "themeDark": "Escuro",
-    "themeSystem": "Sistema"
+    "themeSystem": "Sistema",
+    "accountingMode": "Regime contábil",
+    "accountingCash": "Regime de caixa",
+    "accountingCashShort": "Caixa",
+    "accountingCashDesc": "Compras no cartão contam no dia em que acontecem.",
+    "accountingAccrual": "Regime de competência",
+    "accountingAccrualShort": "Comp.",
+    "accountingAccrualDesc": "Compras no cartão contam na data de vencimento da fatura — reflete o fluxo de caixa real.",
+    "accountingModeSaved": "Regime contábil atualizado"
   },
   "budgets": {
     "title": "Orçamentos",

@@ -50,6 +50,7 @@ import {
   HardDriveDownload,
   Shield,
   ShieldCheck,
+  Scale,
 } from 'lucide-react'
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { ChangePasswordDialog } from '@/components/change-password-dialog'
@@ -115,6 +116,19 @@ export function AppLayout() {
       // localStorage fallback is already set
     }
   }, [user, updateUser])
+
+  const accountingMode = user?.preferences?.credit_card_accounting_mode ?? 'cash'
+  const updateAccountingMode = useCallback(async (mode: 'cash' | 'accrual') => {
+    if (!user) return
+    const prefs = { ...(user.preferences || {}), credit_card_accounting_mode: mode }
+    try {
+      const updated = await authApi.updateMe({ preferences: prefs })
+      updateUser(updated)
+      toast.success(t('settings.accountingModeSaved'))
+    } catch {
+      toast.error(t('common.error'))
+    }
+  }, [user, updateUser, t])
 
   const userInitial = user?.email?.charAt(0).toUpperCase() ?? '?'
   const currentLang = i18n.language
@@ -448,6 +462,50 @@ export function AppLayout() {
                         <span className="flex-1">English</span>
                         {currentLang === 'en' && (
                           <Check size={13} className="text-primary" />
+                        )}
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="flex items-center gap-2">
+                    <Scale size={14} />
+                    <span className="flex-1">{t('settings.accountingMode')}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {accountingMode === 'accrual' ? t('settings.accountingAccrualShort') : t('settings.accountingCashShort')}
+                    </span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent className="w-64">
+                      <DropdownMenuLabel className="px-2 py-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+                        {t('settings.accountingMode')}
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => updateAccountingMode('cash')}
+                        className="flex items-start gap-2 py-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{t('settings.accountingCash')}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {t('settings.accountingCashDesc')}
+                          </p>
+                        </div>
+                        {accountingMode === 'cash' && (
+                          <Check size={13} className="text-primary mt-1 shrink-0" />
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => updateAccountingMode('accrual')}
+                        className="flex items-start gap-2 py-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{t('settings.accountingAccrual')}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {t('settings.accountingAccrualDesc')}
+                          </p>
+                        </div>
+                        {accountingMode === 'accrual' && (
+                          <Check size={13} className="text-primary mt-1 shrink-0" />
                         )}
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
