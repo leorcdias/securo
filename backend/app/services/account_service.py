@@ -10,6 +10,7 @@ from app.models.account import Account
 from app.models.bank_connection import BankConnection
 from app.models.transaction import Transaction
 from app.schemas.account import AccountCreate, AccountUpdate
+from app.services.credit_card_service import compute_available_credit, get_cycle_dates
 
 
 async def get_accounts(session: AsyncSession, user_id: uuid.UUID, include_closed: bool = False) -> list[dict]:
@@ -74,24 +75,55 @@ async def get_accounts(session: AsyncSession, user_id: uuid.UUID, include_closed
     result = await session.execute(query)
 
     return [
-        {
-            "id": acc.id,
-            "user_id": acc.user_id,
-            "connection_id": acc.connection_id,
-            "external_id": acc.external_id,
-            "name": acc.name,
-            "type": acc.type,
-            "balance": acc.balance,
-            "currency": acc.currency,
-            # Connected CC: provider stores positive for debt → negate.
-            # Manual accounts: transaction math already gives correct sign.
-            "current_balance": float(acc.balance) * (-1 if acc.type == "credit_card" else 1) if acc.connection_id else float(current_balance or 0),
-            "previous_balance": float(previous_balance or 0),
-            "is_closed": acc.is_closed,
-            "closed_at": acc.closed_at,
-        }
+        serialize_account(acc, current_balance, previous_balance)
         for acc, current_balance, previous_balance in result.all()
     ]
+
+
+def serialize_account(
+    acc: Account,
+    current_balance: Optional[Decimal],
+    previous_balance: Optional[Decimal],
+) -> dict:
+    # Connected CC: provider stores positive for debt → negate.
+    # Manual accounts: transaction math already gives correct sign.
+    if acc.connection_id:
+        resolved_balance = float(acc.balance) * (-1 if acc.type == "credit_card" else 1)
+    else:
+        resolved_balance = float(current_balance or 0)
+
+    payload = {
+        "id": acc.id,
+        "user_id": acc.user_id,
+        "connection_id": acc.connection_id,
+        "external_id": acc.external_id,
+        "name": acc.name,
+        "type": acc.type,
+        "balance": acc.balance,
+        "currency": acc.currency,
+        "current_balance": resolved_balance,
+        "previous_balance": float(previous_balance or 0),
+        "is_closed": acc.is_closed,
+        "closed_at": acc.closed_at,
+        "credit_limit": float(acc.credit_limit) if acc.credit_limit is not None else None,
+        "statement_close_day": acc.statement_close_day,
+        "payment_due_day": acc.payment_due_day,
+        "minimum_payment": float(acc.minimum_payment) if acc.minimum_payment is not None else None,
+        "card_brand": acc.card_brand,
+        "card_level": acc.card_level,
+        "available_credit": None,
+        "next_close_date": None,
+        "next_due_date": None,
+    }
+
+    if acc.type == "credit_card":
+        available = compute_available_credit(acc.credit_limit, Decimal(str(resolved_balance)))
+        payload["available_credit"] = float(available) if available is not None else None
+        cycle = get_cycle_dates(acc.statement_close_day, acc.payment_due_day)
+        payload["next_close_date"] = cycle["next_close_date"]
+        payload["next_due_date"] = cycle["next_due_date"]
+
+    return payload
 
 
 async def get_account(session: AsyncSession, account_id: uuid.UUID, user_id: uuid.UUID) -> Optional[Account]:
@@ -110,12 +142,19 @@ async def get_account(session: AsyncSession, account_id: uuid.UUID, user_id: uui
 
 
 async def create_account(session: AsyncSession, user_id: uuid.UUID, data: AccountCreate) -> Account:
+    is_cc = data.type == "credit_card"
     account = Account(
         user_id=user_id,
         name=data.name,
         type=data.type,
         balance=data.balance,
         currency=data.currency,
+        credit_limit=data.credit_limit if is_cc else None,
+        statement_close_day=data.statement_close_day if is_cc else None,
+        payment_due_day=data.payment_due_day if is_cc else None,
+        minimum_payment=data.minimum_payment if is_cc else None,
+        card_brand=data.card_brand if is_cc else None,
+        card_level=data.card_level if is_cc else None,
     )
     session.add(account)
     await session.flush()  # get account.id without committing
@@ -148,15 +187,42 @@ async def update_account(
     if not account:
         return None
 
-    # Only allow editing manual accounts
-    if account.connection_id is not None:
-        raise ValueError("Cannot edit bank-connected accounts")
-
     update_data = data.model_dump(exclude_unset=True)
     balance_date = update_data.pop("balance_date", None)
 
+    # Bank-connected accounts are managed by the sync pipeline. Only credit card
+    # metadata (limit + cycle days) can be user-edited, since providers often don't
+    # expose those — users fill them in to unlock cycle-aware filtering.
+    if account.connection_id is not None:
+        editable_fields = {
+            "credit_limit",
+            "statement_close_day",
+            "payment_due_day",
+            "minimum_payment",
+            "card_brand",
+            "card_level",
+        }
+        disallowed = set(update_data.keys()) - editable_fields
+        if disallowed:
+            raise ValueError("Cannot edit bank-connected accounts")
+        if account.type != "credit_card":
+            raise ValueError("Credit card fields can only be set on credit card accounts")
+        for key, value in update_data.items():
+            setattr(account, key, value)
+        await session.commit()
+        await session.refresh(account)
+        return account
+
     for key, value in update_data.items():
         setattr(account, key, value)
+
+    if account.type != "credit_card":
+        account.credit_limit = None
+        account.statement_close_day = None
+        account.payment_due_day = None
+        account.minimum_payment = None
+        account.card_brand = None
+        account.card_level = None
 
     # When balance changes, sync the opening_balance transaction
     if "balance" in update_data:

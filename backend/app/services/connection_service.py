@@ -260,6 +260,64 @@ async def _fuzzy_match_manual(
     return None
 
 
+async def _cleanup_phantom_duplicates(
+    session: AsyncSession,
+    connection_id: uuid.UUID,
+) -> int:
+    """Delete synced transactions that are phantom duplicates.
+
+    Some providers (or sandbox data) report the same payment twice with
+    different external ids on adjacent days. Transfer detection matches the
+    real one against the counterpart in another account; the phantom remains
+    orphaned.
+
+    We delete an unpaired synced tx when it has a *paired* sibling in the same
+    account with: same amount, same type, near-identical description, dated
+    within ±1 day. The pairing of the sibling is the safety signal that lets
+    us distinguish the duplicate from a legitimate same-day repeat (e.g. two
+    real Uber rides for the same fare).
+    """
+    accounts_result = await session.execute(
+        select(Account.id).where(Account.connection_id == connection_id)
+    )
+    account_ids = [row[0] for row in accounts_result.all()]
+    if not account_ids:
+        return 0
+
+    unmatched_result = await session.execute(
+        select(Transaction).where(
+            Transaction.account_id.in_(account_ids),
+            Transaction.source == "sync",
+            Transaction.transfer_pair_id.is_(None),
+        )
+    )
+    unmatched = list(unmatched_result.scalars().all())
+
+    deleted = 0
+    for tx in unmatched:
+        date_lo = tx.date - timedelta(days=1)
+        date_hi = tx.date + timedelta(days=1)
+        sibling_result = await session.execute(
+            select(Transaction).where(
+                Transaction.account_id == tx.account_id,
+                Transaction.source == "sync",
+                Transaction.amount == tx.amount,
+                Transaction.type == tx.type,
+                Transaction.date >= date_lo,
+                Transaction.date <= date_hi,
+                Transaction.transfer_pair_id.is_not(None),
+                Transaction.id != tx.id,
+            )
+        )
+        for sibling in sibling_result.scalars():
+            if _description_similarity(sibling.description, tx.description) >= 0.9:
+                await session.delete(tx)
+                deleted += 1
+                break
+
+    return deleted
+
+
 async def sync_connection(
     session: AsyncSession, connection_id: uuid.UUID, user_id: uuid.UUID
 ) -> tuple[BankConnection, int]:
@@ -296,7 +354,25 @@ async def sync_connection(
             if account:
                 account.balance = acc_data.balance
                 account.name = acc_data.name
+                if acc_data.type == "credit_card":
+                    account.credit_limit = acc_data.credit_limit
+                    # Preserve existing close/due days when the provider doesn't expose
+                    # them. Pluggy's balanceCloseDate is intermittently null even on
+                    # connectors that have it elsewhere, and users may have set these
+                    # manually via the edit dialog. Treat user input + previously-synced
+                    # values as the higher source of truth than a fresh None.
+                    if acc_data.statement_close_day is not None:
+                        account.statement_close_day = acc_data.statement_close_day
+                    if acc_data.payment_due_day is not None:
+                        account.payment_due_day = acc_data.payment_due_day
+                    if acc_data.minimum_payment is not None:
+                        account.minimum_payment = acc_data.minimum_payment
+                    if acc_data.card_brand is not None:
+                        account.card_brand = acc_data.card_brand
+                    if acc_data.card_level is not None:
+                        account.card_level = acc_data.card_level
             else:
+                is_cc = acc_data.type == "credit_card"
                 account = Account(
                     user_id=user_id,
                     connection_id=connection.id,
@@ -305,6 +381,12 @@ async def sync_connection(
                     type=acc_data.type,
                     balance=acc_data.balance,
                     currency=acc_data.currency,
+                    credit_limit=acc_data.credit_limit if is_cc else None,
+                    statement_close_day=acc_data.statement_close_day if is_cc else None,
+                    payment_due_day=acc_data.payment_due_day if is_cc else None,
+                    minimum_payment=acc_data.minimum_payment if is_cc else None,
+                    card_brand=acc_data.card_brand if is_cc else None,
+                    card_level=acc_data.card_level if is_cc else None,
                 )
                 session.add(account)
                 await session.flush()
@@ -312,8 +394,17 @@ async def sync_connection(
             if account and account.is_closed:
                 continue
 
-            # Fetch and sync transactions
-            since = connection.last_sync_at.date() if connection.last_sync_at else None
+            # Fetch and sync transactions.
+            # Rewind the window by 14 days on incremental syncs so we catch
+            # late-arriving transactions: bank authorizations that post a few
+            # days after the purchase date, or direct debits that Pluggy only
+            # exposes once they've been processed by the issuer. Dedup on
+            # external_id below handles any overlap cheaply.
+            since = (
+                connection.last_sync_at.date() - timedelta(days=14)
+                if connection.last_sync_at
+                else None
+            )
             transactions_data = await provider.get_transactions(
                 credentials, acc_data.external_id, since, payee_source=payee_source
             )
@@ -393,6 +484,11 @@ async def sync_connection(
         # Detect transfer pairs among newly synced transactions
         if new_tx_ids:
             await detect_transfer_pairs(session, user_id, candidate_ids=new_tx_ids)
+
+        # Clean up phantom duplicates: providers occasionally double-report the
+        # same payment with different ids. Once transfer detection has paired
+        # the real one, the orphan twin gets removed here.
+        await _cleanup_phantom_duplicates(session, connection.id)
 
         connection.last_sync_at = datetime.now(timezone.utc)
         connection.status = "active"

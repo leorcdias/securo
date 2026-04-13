@@ -12,6 +12,12 @@ class AccountData:
     type: str  # checking, savings, credit_card
     balance: Decimal
     currency: str
+    credit_limit: Optional[Decimal] = None
+    statement_close_day: Optional[int] = None
+    payment_due_day: Optional[int] = None
+    minimum_payment: Optional[Decimal] = None
+    card_brand: Optional[str] = None
+    card_level: Optional[str] = None
 
 
 @dataclass
