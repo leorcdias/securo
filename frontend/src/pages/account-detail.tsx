@@ -264,7 +264,7 @@ export default function AccountDetailPage() {
       setFilterFrom(start)
       setFilterTo(end)
     }
-  }, [account?.id, account?.type, account?.statement_close_day, account?.payment_due_day])
+  }, [account])
 
   const { data: accountsList } = useQuery({
     queryKey: ['accounts'],
@@ -283,7 +283,7 @@ export default function AccountDetailPage() {
     if (!account || account.type !== 'credit_card' || !account.statement_close_day) return null
     const dayBeforeStart = new Date(parseISO(filterFrom + 'T00:00:00').getTime() - 86400000)
     return creditCardCycleBoundaries(account.statement_close_day, dayBeforeStart)
-  }, [account?.id, account?.type, account?.statement_close_day, filterFrom])
+  }, [account, filterFrom])
 
   const { data: previousCycleSummary } = useQuery({
     queryKey: ['accounts', id, 'summary', previousCycle?.start, previousCycle?.end],
@@ -302,7 +302,7 @@ export default function AccountDetailPage() {
       ref = new Date(parseISO(c.start + 'T00:00:00').getTime() - 86400000)
     }
     return cycles
-  }, [account?.id, account?.type, account?.statement_close_day])
+  }, [account])
 
   const timelineQueries = useQueries({
     queries: timelineCycles.map(c => ({
