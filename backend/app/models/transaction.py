@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date as _date, datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
@@ -28,12 +28,12 @@ class Transaction(Base):
     description: Mapped[str] = mapped_column(String(500))
     amount: Mapped[Decimal] = mapped_column(Numeric(precision=15, scale=2))
     currency: Mapped[str] = mapped_column(String(3), default="USD")
-    date: Mapped[date] = mapped_column(Date)
+    date: Mapped[_date] = mapped_column(Date)
     # Effective date for cash-flow reporting. For regular accounts this equals
     # `date`. For credit card transactions it's the due date of the bill that
     # the transaction belongs to — so accrual-mode aggregations count the
     # purchase when it hits the user's cash, not when it was made.
-    effective_date: Mapped[date] = mapped_column(Date, index=True)
+    effective_date: Mapped[_date] = mapped_column(Date, index=True)
     type: Mapped[str] = mapped_column(String(10))  # debit, credit
     source: Mapped[str] = mapped_column(String(20))  # sync, ofx, csv, manual
     status: Mapped[str] = mapped_column(String(10), default="posted")  # posted, pending
@@ -54,7 +54,7 @@ class Transaction(Base):
     installment_total_amount: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(precision=15, scale=2), nullable=True
     )
-    installment_purchase_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    installment_purchase_date: Mapped[Optional[_date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     account: Mapped["Account"] = relationship(back_populates="transactions")
