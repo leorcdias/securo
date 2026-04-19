@@ -678,62 +678,66 @@ function AccountDialog({
               <p className="text-xs text-muted-foreground">{t('accounts.displayNameHint')}</p>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>{t('accounts.accountType')}</Label>
-              <select
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-              >
-                <option value="checking">{t('accounts.typeChecking')}</option>
-                <option value="savings">{t('accounts.typeSavings')}</option>
-                <option value="credit_card">{t('accounts.typeCreditCard')}</option>
-                <option value="investment">{t('accounts.typeInvestment')}</option>
-                <option value="wallet">{t('accounts.typeWallet')}</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>{t('accounts.currency')}</Label>
-              <select
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-              >
-                {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency, flag: '' }]).map((c) => (
-                  <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>
-                {type === 'credit_card'
-                  ? t('accounts.balanceCreditCard')
-                  : t('accounts.balance')}
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                min={type === 'credit_card' ? '0' : undefined}
-                value={balance}
-                onChange={(e) => setBalance(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t('accounts.balanceDate')}</Label>
-              <DatePickerInput
-                value={balanceDate}
-                onChange={setBalanceDate}
-                className="w-full justify-start"
-              />
-            </div>
-          </div>
-          {type === 'credit_card' && (
-            <p className="text-xs text-muted-foreground -mt-2">
-              {t('accounts.balanceCreditCardHint')}
-            </p>
+          {!account?.connection_id && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{t('accounts.accountType')}</Label>
+                  <select
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                  >
+                    <option value="checking">{t('accounts.typeChecking')}</option>
+                    <option value="savings">{t('accounts.typeSavings')}</option>
+                    <option value="credit_card">{t('accounts.typeCreditCard')}</option>
+                    <option value="investment">{t('accounts.typeInvestment')}</option>
+                    <option value="wallet">{t('accounts.typeWallet')}</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('accounts.currency')}</Label>
+                  <select
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                  >
+                    {(supportedCurrencies ?? [{ code: userCurrency, symbol: userCurrency, name: userCurrency, flag: '' }]).map((c) => (
+                      <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>
+                    {type === 'credit_card'
+                      ? t('accounts.balanceCreditCard')
+                      : t('accounts.balance')}
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={type === 'credit_card' ? '0' : undefined}
+                    value={balance}
+                    onChange={(e) => setBalance(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('accounts.balanceDate')}</Label>
+                  <DatePickerInput
+                    value={balanceDate}
+                    onChange={setBalanceDate}
+                    className="w-full justify-start"
+                  />
+                </div>
+              </div>
+              {type === 'credit_card' && (
+                <p className="text-xs text-muted-foreground -mt-2">
+                  {t('accounts.balanceCreditCardHint')}
+                </p>
+              )}
+            </>
           )}
           {type === 'credit_card' && (
             <div className="space-y-4 rounded-lg border border-border bg-muted/30 p-4">
