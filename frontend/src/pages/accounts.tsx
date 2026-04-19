@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getAccountName } from '@/lib/account-utils'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -227,7 +228,7 @@ export default function AccountsPage() {
                           <Icon size={14} className={cfg.color} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground truncate">{acc.name}</p>
+                          <p className="text-sm font-medium text-foreground truncate">{getAccountName(acc)}</p>
                           <p className="text-xs text-muted-foreground">
                             {t(cfg.label)}
                             {dueText && <> · <span className={dueClass}>{dueText}</span></>}
@@ -384,20 +385,29 @@ export default function AccountsPage() {
                                   <Icon size={14} className={cfg.color} />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-foreground truncate">{acc.name}</p>
+                                  <p className="text-sm font-medium text-foreground truncate">{getAccountName(acc)}</p>
                                   <p className="text-xs text-muted-foreground">
                                     {t(cfg.label)}
                                     {dueText && <> · <span className={dueClass}>{dueText}</span></>}
                                   </p>
                                 </div>
                               </Link>
-                              <button
-                                className="p-1.5 rounded-md text-muted-foreground hover:text-amber-600 hover:bg-amber-50 transition-colors opacity-0 group-hover:opacity-100 mr-3"
-                                onClick={(e) => { e.preventDefault(); setClosingAccountId(acc.id) }}
-                                title={t('accounts.close')}
-                              >
-                                <Archive size={13} />
-                              </button>
+                              <div className="flex items-center gap-1 mr-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                  onClick={(e) => { e.preventDefault(); setEditingAccount(acc); setDialogOpen(true) }}
+                                  title={t('common.edit')}
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  className="p-1.5 rounded-md text-muted-foreground hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                  onClick={(e) => { e.preventDefault(); setClosingAccountId(acc.id) }}
+                                  title={t('accounts.close')}
+                                >
+                                  <Archive size={13} />
+                                </button>
+                              </div>
                               <div className="text-right">
                                 <p className={`text-xs sm:text-sm font-semibold tabular-nums ${(acc.type === 'credit_card' ? bal > 0 : bal < 0) ? 'text-rose-500' : 'text-foreground'}`}>
                                   {mask(formatCurrency(bal, acc.currency, locale))}
@@ -447,7 +457,7 @@ export default function AccountsPage() {
                         <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
                           <Icon size={14} className={cfg.color} />
                         </div>
-                        <p className="text-sm font-medium text-muted-foreground truncate">{acc.name}</p>
+                        <p className="text-sm font-medium text-muted-foreground truncate">{getAccountName(acc)}</p>
                       </div>
                       <Button
                         variant="ghost"
@@ -582,6 +592,7 @@ function AccountDialog({
   account: Account | null
   onSave: (data: {
     name?: string
+    display_name?: string | null
     type?: string
     balance?: number
     balance_date?: string
@@ -601,6 +612,7 @@ function AccountDialog({
     staleTime: Infinity,
   })
   const [name, setName] = useState(account?.name ?? '')
+  const [displayName, setDisplayName] = useState(account?.display_name ?? '')
   const [type, setType] = useState(account?.type ?? 'checking')
   const [balance, setBalance] = useState(account?.balance?.toString() ?? '0')
   const [currency, setCurrency] = useState(account?.currency ?? userCurrency)
@@ -611,6 +623,7 @@ function AccountDialog({
 
   useEffect(() => {
     setName(account?.name ?? '')
+    setDisplayName(account?.display_name ?? '')
     setType(account?.type ?? 'checking')
     setBalance(account?.balance?.toString() ?? '0')
     setCurrency(account?.currency ?? userCurrency)
@@ -637,23 +650,34 @@ function AccountDialog({
               const n = parseInt(v, 10)
               return Number.isFinite(n) && n >= 1 && n <= 31 ? n : null
             }
+            const isConnected = !!account?.connection_id
             onSave({
-              name,
-              type,
-              balance: parseFloat(balance),
-              balance_date: balanceDate,
-              currency,
-              credit_limit: isCC && creditLimit !== '' ? parseFloat(creditLimit) : null,
-              statement_close_day: isCC ? parseDay(statementCloseDay) : null,
-              payment_due_day: isCC ? parseDay(paymentDueDay) : null,
+              ...(!isConnected && { name, type, balance: parseFloat(balance), balance_date: balanceDate, currency }),
+              display_name: displayName.trim() || null,
+              ...(isCC && {
+                credit_limit: creditLimit !== '' ? parseFloat(creditLimit) : null,
+                statement_close_day: parseDay(statementCloseDay),
+                payment_due_day: parseDay(paymentDueDay),
+              }),
             })
           }}
           className="space-y-4"
         >
           <div className="space-y-2">
             <Label>{t('accounts.accountName')}</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} required />
+            <Input value={name} onChange={(e) => setName(e.target.value)} required disabled={!!account?.connection_id} />
           </div>
+          {account?.connection_id && (
+            <div className="space-y-2">
+              <Label>{t('accounts.displayName')}</Label>
+              <Input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={name}
+              />
+              <p className="text-xs text-muted-foreground">{t('accounts.displayNameHint')}</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>{t('accounts.accountType')}</Label>
