@@ -404,11 +404,19 @@ async def delete_account(session: AsyncSession, account_id: uuid.UUID, user_id: 
 
     # Clean up attachment files for all transactions in this account
     from app.services.attachment_service import cleanup_attachment_files
+    from app.models.import_log import ImportLog
     tx_result = await session.execute(
         select(Transaction.id).where(Transaction.account_id == account_id)
     )
     tx_ids = [row[0] for row in tx_result.all()]
     await cleanup_attachment_files(session, tx_ids)
+
+    # Delete import logs before account to avoid FK constraint violation
+    import_logs_result = await session.execute(
+        select(ImportLog).where(ImportLog.account_id == account_id)
+    )
+    for log in import_logs_result.scalars().all():
+        await session.delete(log)
 
     await session.delete(account)
     await session.commit()
