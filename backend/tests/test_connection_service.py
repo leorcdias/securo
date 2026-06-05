@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.bank_connection import BankConnection
 from app.models.category import Category
 from app.models.transaction import Transaction
+from app.models.workspace import Workspace, WorkspaceMember
 from app.providers.base import AccountData, BillData, ConnectionData, ConnectTokenData, TransactionData
 from app.services.connection_service import (
     _description_similarity,
@@ -48,16 +49,46 @@ async def _make_connection(
 
 
 async def _make_category(
-    session: AsyncSession, user_id: uuid.UUID, name: str,
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    name: str,
+    workspace_id: uuid.UUID | None = None,
 ) -> Category:
     cat = Category(
         id=uuid.uuid4(), user_id=user_id, name=name,
+        workspace_id=workspace_id,
         icon="tag", color="#000", is_system=False,
     )
     session.add(cat)
     await session.commit()
     await session.refresh(cat)
     return cat
+
+
+async def _make_workspace(
+    session: AsyncSession, user_id: uuid.UUID, name: str = "Extra",
+) -> Workspace:
+    workspace = Workspace(
+        id=uuid.uuid4(),
+        name=name,
+        kind="personal",
+        created_by_user_id=user_id,
+        default_currency="BRL",
+        locale="pt-BR",
+    )
+    session.add(workspace)
+    await session.flush()
+    session.add(
+        WorkspaceMember(
+            id=uuid.uuid4(),
+            workspace_id=workspace.id,
+            user_id=user_id,
+            role="owner",
+        )
+    )
+    await session.commit()
+    await session.refresh(workspace)
+    return workspace
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +186,29 @@ async def test_match_pluggy_user_has_no_category(session: AsyncSession, test_use
     # "Eating out" maps to "Alimentação" but we don't create it
     cat_id = await _match_pluggy_category(session, test_user.id, "Eating out")
     assert cat_id is None
+
+
+@pytest.mark.asyncio
+async def test_match_pluggy_scopes_duplicate_names_to_workspace(
+    session: AsyncSession, test_user, test_workspace
+):
+    """Provider category mapping must not mix equal names across workspaces."""
+    other_workspace = await _make_workspace(session, test_user.id)
+    primary = await _make_category(
+        session, test_user.id, "Alimentação", workspace_id=test_workspace.id
+    )
+    await _make_category(
+        session, test_user.id, "Alimentação", workspace_id=other_workspace.id
+    )
+
+    cat_id = await _match_pluggy_category(
+        session,
+        test_user.id,
+        "Eating out",
+        workspace_id=test_workspace.id,
+    )
+
+    assert cat_id == primary.id
 
 
 # ---------------------------------------------------------------------------

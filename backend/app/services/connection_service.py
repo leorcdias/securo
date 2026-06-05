@@ -316,6 +316,7 @@ async def _match_pluggy_category(
     session: AsyncSession,
     user_id: uuid.UUID,
     pluggy_category: Optional[str],
+    workspace_id: Optional[uuid.UUID] = None,
     enabled: bool = True,
 ) -> Optional[uuid.UUID]:
     # `enabled` is the resolved value of the global `use_provider_categories`
@@ -330,8 +331,14 @@ async def _match_pluggy_category(
         app_name = PLUGGY_CATEGORY_MAP.get(pluggy_category.split(" - ")[0])
     if not app_name:
         return None
+    query = select(Category.id).where(Category.name == app_name)
+    if workspace_id is not None:
+        query = query.where(Category.workspace_id == workspace_id)
+    else:
+        query = query.where(Category.user_id == user_id)
+
     result = await session.execute(
-        select(Category.id).where(Category.user_id == user_id, Category.name == app_name)
+        query.order_by(Category.is_system.desc(), Category.name, Category.id).limit(1)
     )
     return result.scalar_one_or_none()
 
@@ -578,7 +585,11 @@ async def handle_oauth_callback(
                 continue
 
             category_id = await _match_pluggy_category(
-                session, user_id, txn_data.pluggy_category, enabled=use_provider_cats
+                session,
+                user_id,
+                txn_data.pluggy_category,
+                workspace_id=workspace_id,
+                enabled=use_provider_cats,
             )
             # Resolve payee entity from raw payee text
             payee_id = None
@@ -1278,7 +1289,11 @@ async def sync_connection(
                     continue
 
                 category_id = await _match_pluggy_category(
-                    session, user_id, txn_data.pluggy_category, enabled=use_provider_cats
+                    session,
+                    user_id,
+                    txn_data.pluggy_category,
+                    workspace_id=workspace_id,
+                    enabled=use_provider_cats,
                 )
 
                 # Resolve payee entity from raw payee text
